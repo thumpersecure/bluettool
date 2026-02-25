@@ -128,6 +128,9 @@ The app will open like a native app from your home screen. The in-app Scanner ta
 | Capability | Description |
 |------------|-------------|
 | 📋 **Device List** | View all discovered devices with names, IDs, connection status |
+| 🔄 **Refresh** | Refresh the device list without rescanning |
+| 📊 **Sort** | Sort by newest, oldest, or name (A–Z / Z–A) |
+| 🔍 **Filter** | Filter by all, connected only, or available devices |
 | 🔗 **GATT Profile** | Connect and enumerate full GATT profile |
 | ✏️ **Read/Write** | Read, write, and subscribe to individual characteristics |
 | 📸 **Snapshots** | Capture device profile snapshots from the detail panel |

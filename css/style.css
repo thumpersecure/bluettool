@@ -137,7 +137,7 @@ body {
 }
 
 .tab {
-  flex: 1;
+  flex: 1 0 44px; /* grow to fill, don't shrink below 44px — enables horizontal scroll on small screens */
   min-width: 44px;
   min-height: 44px;
   background: none;
@@ -643,6 +643,7 @@ body {
 
 .input-select-small {
   padding: 6px 10px;
+  min-height: 44px;
   font-size: 12px;
   background: var(--bg-input);
   border: 1px solid var(--border-color);
@@ -1327,6 +1328,7 @@ body {
 .empty-state .empty-cta {
   margin-top: 16px;
   padding: 10px 20px;
+  min-height: 44px;
   font-size: 14px;
   border-radius: 10px;
   background: rgba(0, 229, 255, 0.12);
@@ -1375,6 +1377,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .device-list-header h2 {

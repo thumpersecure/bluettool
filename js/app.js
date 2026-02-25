@@ -186,6 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function applySettings(settings) {
     document.documentElement.setAttribute('data-theme', settings.themeDark ? 'dark' : 'light');
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = settings.themeDark ? '#0a0e27' : '#f5f6fa';
     const themeCheck = document.getElementById('setting-theme-dark');
     if (themeCheck) themeCheck.checked = settings.themeDark;
     const persistVol = document.getElementById('setting-persist-volume');
