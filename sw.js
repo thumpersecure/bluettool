@@ -2,7 +2,7 @@
  * BlueTTool Service Worker
  * Enables offline PWA support by caching app shell and assets.
  */
-const CACHE_NAME = 'bluettool-v2';
+const CACHE_NAME = 'bluettool-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   './js/bluetooth-scanner.js',
   './js/announcements.js',
   './js/audio-player.js',
+  './js/vulnerability.js',
   './js/advanced.js',
   './js/sharing.js',
   './js/app.js',

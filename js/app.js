@@ -666,6 +666,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnAgentFull.addEventListener('click', async () => {
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
+    document.getElementById('vuln-report-card').style.display = 'none';
     await Advanced.runFullDiscovery();
     renderDeviceList();
   });
@@ -673,6 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnAgentQuick.addEventListener('click', async () => {
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
+    document.getElementById('vuln-report-card').style.display = 'none';
     await Advanced.quickScan();
     renderDeviceList();
   });
@@ -701,6 +703,65 @@ document.addEventListener('DOMContentLoaded', () => {
     html += '</div>';
 
     agentResultsEl.innerHTML = html;
+
+    // Render vulnerability report if available
+    if (data.vulnReport) {
+      renderVulnReport(data.vulnReport);
+    }
+  }
+
+  function renderVulnReport(report) {
+    const card = document.getElementById('vuln-report-card');
+    card.style.display = 'block';
+
+    // Score banner
+    const banner = document.getElementById('vuln-score-banner');
+    const riskClass = 'vuln-risk-' + report.riskLevel.toLowerCase();
+    banner.className = 'vuln-score-banner ' + riskClass;
+    banner.innerHTML = `
+      <div>
+        <div class="vuln-score-label">${escapeHtml(report.riskLevel)} Risk</div>
+        <div style="font-size:11px;color:var(--text-secondary);">${escapeHtml(report.deviceName)}</div>
+      </div>
+      <div class="vuln-score-value">${report.riskScore}/100</div>
+    `;
+
+    // Stats
+    const statsEl = document.getElementById('vuln-stats');
+    statsEl.innerHTML = [
+      `Readable: ${report.stats.totalReadable}`,
+      `Writable: ${report.stats.totalWritable}`,
+      `Sensitive: ${report.stats.sensitiveExposed}`,
+      `Notify: ${report.stats.notifyChars}`,
+      `Findings: ${report.findings.length}`
+    ].map(s => `<span class="vuln-stat">${s}</span>`).join('');
+
+    // Findings
+    const findingsEl = document.getElementById('vuln-findings');
+    if (report.findings.length === 0) {
+      findingsEl.innerHTML = '<div style="font-size:12px;color:var(--text-hint);text-align:center;padding:12px;">No vulnerability findings</div>';
+    } else {
+      findingsEl.innerHTML = report.findings.map(f => `
+        <div class="vuln-finding sev-${f.severity}">
+          <div class="vuln-finding-header">
+            <span class="vuln-sev-badge sev-${f.severity}">${escapeHtml(f.severity)}</span>
+            <span class="vuln-finding-title">${escapeHtml(f.title)}</span>
+          </div>
+          <div class="vuln-finding-detail">${escapeHtml(f.detail)}</div>
+          <div class="vuln-finding-category">${escapeHtml(f.category)}</div>
+        </div>
+      `).join('');
+    }
+
+    // Recommendations
+    const recsEl = document.getElementById('vuln-recommendations');
+    recsEl.innerHTML = '<h3>Recommendations</h3>' +
+      report.recommendations.map(r => `
+        <div class="vuln-rec">
+          <span class="vuln-rec-priority pri-${r.priority}">${escapeHtml(r.priority)}</span>
+          ${escapeHtml(r.text)}
+        </div>
+      `).join('');
   }
 
   // --- Log Tab ---
