@@ -1,11 +1,24 @@
 /**
  * BlueTTool - Main Application Controller
- * Wires together UI events with Bluetooth scanner, announcements, and Rick Roll
+ * Wires UI events to Bluetooth scanner, audio, advanced agent, and sharing.
+ * Optimized for Bluefy browser on iOS.
  */
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize modules
+  // --- Shared Utilities ---
+  function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+  }
+
+  function isPrintable(str) {
+    return /^[\x20-\x7E]+$/.test(str);
+  }
+
+  // --- Initialize ---
   Logger.init();
-  Logger.info('BlueTTool initialized');
+  Logger.info('BlueTTool initialized — Bluefy mobile app');
   Logger.info('Checking browser compatibility...');
   BluetoothScanner.checkSupport();
 
@@ -17,9 +30,15 @@ document.addEventListener('DOMContentLoaded', () => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.tab;
       tabs.forEach(t => t.classList.remove('active'));
-      tabContents.forEach(tc => tc.classList.remove('active'));
+      tabContents.forEach(tc => {
+        // Only toggle visibility for tabs that are in the tab bar
+        if (tc.id !== 'announcements') {
+          tc.classList.remove('active');
+        }
+      });
       tab.classList.add('active');
-      document.getElementById(target).classList.add('active');
+      const targetEl = document.getElementById(target);
+      if (targetEl) targetEl.classList.add('active');
     });
   });
 
@@ -41,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await BluetoothScanner.scan(options);
       renderDeviceList();
-    } catch (err) {
+    } catch (_) {
       // Error already logged by scanner
     }
   });
@@ -50,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await BluetoothScanner.scanAll();
       renderDeviceList();
-    } catch (err) {
+    } catch (_) {
       // Error already logged
     }
   });
@@ -62,10 +81,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   BluetoothScanner.setOnConnectionChange((info, connected) => {
     renderDeviceList();
-    updateCaptureButton();
     if (connected) {
-      // Trigger Rick Roll on successful connection
-      RickRoll.trigger();
+      showAudioOverlay();
+      AudioPlayer.triggerOnConnect();
     }
   });
 
@@ -82,27 +100,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const list = document.getElementById('device-list');
     const devices = BluetoothScanner.getDevices();
 
+    // Update device count in status bar
+    const countEl = document.getElementById('device-count');
+    if (countEl) {
+      countEl.textContent = `${devices.length} device${devices.length !== 1 ? 's' : ''}`;
+    }
+
     if (devices.length === 0) {
       list.innerHTML = '<div class="empty-state">No devices discovered yet. Start scanning!</div>';
       return;
     }
 
     list.innerHTML = devices.map(dev => `
-      <div class="device-item" data-device-id="${dev.id}">
+      <div class="device-item" data-device-id="${escapeHtml(dev.id)}">
         <div class="device-item-header">
           <span class="device-name">${escapeHtml(dev.name)}</span>
-          ${dev.connected ? '<span class="device-rssi">Connected</span>' : ''}
+          ${dev.connected ? '<span class="conn-badge">Connected</span>' : ''}
         </div>
-        <div class="device-id">ID: ${escapeHtml(dev.id)}</div>
+        <div class="device-id-row">
+          <span class="device-id-label">ID:</span>
+          <span class="device-id">${escapeHtml(dev.id)}</span>
+        </div>
         <div class="device-meta">
-          ${dev.connected ? '<span class="device-tag tag-connected">GATT Connected</span>' : ''}
-          ${dev.services.length > 0 ? `<span class="device-tag tag-service">${dev.services.length} services</span>` : ''}
-          <span class="device-tag tag-new">${new Date(dev.discovered).toLocaleTimeString()}</span>
+          ${dev.connected ? '<span class="device-tag tag-connected">GATT</span>' : ''}
+          ${dev.services.length > 0 ? `<span class="device-tag tag-service">${dev.services.length} svc</span>` : ''}
+          ${dev.characteristics.length > 0 ? `<span class="device-tag tag-char">${dev.characteristics.length} char</span>` : ''}
+          <span class="device-tag tag-time">${new Date(dev.discovered).toLocaleTimeString()}</span>
         </div>
       </div>
     `).join('');
 
-    // Bind click handlers for each device item
+    // Bind click handlers
     list.querySelectorAll('.device-item').forEach(item => {
       item.addEventListener('click', () => {
         showDeviceDetail(item.dataset.deviceId);
@@ -131,11 +159,13 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="detail-row">
           <span class="detail-label">Device ID</span>
-          <span class="detail-value">${escapeHtml(dev.id)}</span>
+          <span class="detail-value detail-value-mono">${escapeHtml(dev.id)}</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">Status</span>
-          <span class="detail-value">${dev.connected ? 'Connected' : 'Disconnected'}</span>
+          <span class="detail-value ${dev.connected ? 'val-connected' : 'val-disconnected'}">
+            ${dev.connected ? 'Connected' : 'Disconnected'}
+          </span>
         </div>
         <div class="detail-row">
           <span class="detail-label">Discovered</span>
@@ -146,11 +176,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Connect / Disconnect button
     if (dev.connected) {
-      html += `<button class="btn btn-danger btn-large" id="btn-detail-disconnect"
-        style="margin-bottom:12px">Disconnect</button>`;
+      html += `<button class="btn btn-danger btn-large" id="btn-detail-disconnect">Disconnect</button>`;
     } else {
-      html += `<button class="btn btn-primary btn-large" id="btn-detail-connect"
-        style="margin-bottom:12px">Connect &amp; Enumerate Services</button>`;
+      html += `<button class="btn btn-primary btn-large" id="btn-detail-connect">Connect &amp; Enumerate</button>`;
+    }
+
+    // Capture button for connected devices
+    if (dev.connected) {
+      html += `<button class="btn btn-secondary btn-large" id="btn-detail-capture" style="margin-top:8px;">Capture Profile Snapshot</button>`;
     }
 
     // Services
@@ -176,19 +209,16 @@ document.addEventListener('DOMContentLoaded', () => {
             html += `<div class="char-value">Text: ${escapeHtml(char.textValue)}</div>`;
           }
 
-          // Action buttons for characteristics
           html += `<div class="char-actions">`;
           if (char.properties.includes('read')) {
             html += `<button class="btn btn-secondary btn-small btn-char-read"
-              data-char-uuid="${char.uuid}" data-device-id="${dev.id}">Read</button>`;
+              data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">Read</button>`;
           }
           if (char.properties.includes('notify') || char.properties.includes('indicate')) {
             html += `<button class="btn btn-secondary btn-small btn-char-notify"
-              data-char-uuid="${char.uuid}" data-device-id="${dev.id}">Subscribe</button>`;
+              data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">Subscribe</button>`;
           }
-          html += `</div>`;
-
-          html += `</div>`; // char-item
+          html += `</div></div>`; // char-actions, char-item
         }
 
         html += `</div>`; // service-item
@@ -203,12 +233,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const connectBtn = document.getElementById('btn-detail-connect');
     if (connectBtn) {
       connectBtn.addEventListener('click', async () => {
+        connectBtn.disabled = true;
+        connectBtn.textContent = 'Connecting...';
         try {
           await BluetoothScanner.connect(deviceId);
-          showDeviceDetail(deviceId); // Refresh detail view
+          showDeviceDetail(deviceId);
           renderDeviceList();
-        } catch (err) {
-          // Logged by scanner
+        } catch (_) {
+          connectBtn.disabled = false;
+          connectBtn.textContent = 'Connect & Enumerate';
         }
       });
     }
@@ -222,20 +255,43 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Char read buttons
+    const captureBtn = document.getElementById('btn-detail-capture');
+    if (captureBtn) {
+      captureBtn.addEventListener('click', async () => {
+        captureBtn.disabled = true;
+        captureBtn.textContent = 'Capturing...';
+        try {
+          await Announcements.captureFromDevice();
+          captureBtn.textContent = 'Captured!';
+          setTimeout(() => {
+            captureBtn.textContent = 'Capture Profile Snapshot';
+            captureBtn.disabled = false;
+          }, 2000);
+        } catch (_) {
+          captureBtn.textContent = 'Capture Failed';
+          captureBtn.disabled = false;
+        }
+      });
+    }
+
+    // Char read buttons — always get fresh device list to avoid stale refs
     content.querySelectorAll('.btn-char-read').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const charUuid = btn.dataset.charUuid;
-        const d = devices.find(x => x.id === btn.dataset.deviceId);
+        const freshDevices = BluetoothScanner.getDevices();
+        const d = freshDevices.find(x => x.id === btn.dataset.deviceId);
         if (!d) return;
         const charInfo = d.characteristics.find(c => c.uuid === charUuid);
         if (!charInfo) return;
+        btn.disabled = true;
+        btn.textContent = 'Reading...';
         try {
           await BluetoothScanner.readCharacteristic(charInfo);
           showDeviceDetail(deviceId);
-        } catch (err) {
-          // Logged
+        } catch (_) {
+          btn.disabled = false;
+          btn.textContent = 'Read';
         }
       });
     });
@@ -245,18 +301,21 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const charUuid = btn.dataset.charUuid;
-        const d = devices.find(x => x.id === btn.dataset.deviceId);
+        const freshDevices = BluetoothScanner.getDevices();
+        const d = freshDevices.find(x => x.id === btn.dataset.deviceId);
         if (!d) return;
         const charInfo = d.characteristics.find(c => c.uuid === charUuid);
         if (!charInfo) return;
+        btn.disabled = true;
+        btn.textContent = 'Subscribing...';
         try {
           await BluetoothScanner.subscribeNotifications(charInfo, () => {
-            showDeviceDetail(deviceId); // Refresh on notification
+            showDeviceDetail(deviceId);
           });
           btn.textContent = 'Subscribed';
-          btn.disabled = true;
-        } catch (err) {
-          // Logged
+        } catch (_) {
+          btn.disabled = false;
+          btn.textContent = 'Subscribe';
         }
       });
     });
@@ -266,82 +325,139 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('device-detail').classList.add('hidden');
   });
 
-  // --- Announcements Tab ---
-  function updateCaptureButton() {
-    const btn = document.getElementById('btn-capture');
-    const connected = BluetoothScanner.getConnectedDevice();
-    btn.disabled = !connected || !connected.connected;
+  // --- Audio Tab ---
+  document.getElementById('btn-play-dtmf').addEventListener('click', () => {
+    AudioPlayer.playDTMFSequence();
+  });
+
+  document.getElementById('btn-play-file').addEventListener('click', () => {
+    AudioPlayer.playFile();
+  });
+
+  document.getElementById('btn-stop-audio').addEventListener('click', () => {
+    AudioPlayer.stopAll();
+  });
+
+  document.getElementById('btn-silence-all').addEventListener('click', () => {
+    // Stop any playing audio
+    AudioPlayer.stopAll();
+    // Disconnect all BLE devices
+    const devices = BluetoothScanner.getDevices();
+    let disconnected = 0;
+    for (const dev of devices) {
+      if (dev.connected) {
+        BluetoothScanner.disconnect(dev.id);
+        disconnected++;
+      }
+    }
+    Logger.success(`Silenced: stopped audio, disconnected ${disconnected} device(s)`);
+    renderDeviceList();
+    // Visual feedback
+    const btn = document.getElementById('btn-silence-all');
+    btn.textContent = 'Done!';
+    setTimeout(() => {
+      btn.textContent = 'Silence All — Disconnect Devices';
+    }, 2000);
+  });
+
+  // --- Sharing ---
+  document.getElementById('btn-share-audio').addEventListener('click', () => {
+    Sharing.shareAudioFile();
+  });
+
+  document.getElementById('btn-share-hearts').addEventListener('click', () => {
+    Sharing.shareHearts();
+  });
+
+  document.getElementById('btn-share-link').addEventListener('click', () => {
+    Sharing.shareLink(
+      'https://thumpersecure.github.io/bluettool/',
+      'BlueTTool',
+      'BLE scanner and testing tool for Bluefy on iOS'
+    );
+  });
+
+  // --- Audio Overlay ---
+  function showAudioOverlay() {
+    const overlay = document.getElementById('audio-overlay');
+    if (overlay) overlay.classList.remove('hidden');
   }
 
-  document.getElementById('btn-capture').addEventListener('click', async () => {
-    try {
-      const profile = await Announcements.captureFromDevice();
-      renderCaptures();
-    } catch (err) {
-      // Logged
-    }
+  document.getElementById('btn-close-audio-overlay').addEventListener('click', () => {
+    const overlay = document.getElementById('audio-overlay');
+    if (overlay) overlay.classList.add('hidden');
+    AudioPlayer.stopAll();
   });
 
-  document.getElementById('btn-mimic').addEventListener('click', async () => {
-    const select = document.getElementById('mimic-select');
-    const captureId = select.value;
-    if (!captureId) return;
+  // --- Advanced / Agent Tab ---
+  const agentStatusCard = document.getElementById('agent-status-card');
+  const agentResultsCard = document.getElementById('agent-results-card');
+  const agentFeed = document.getElementById('agent-feed');
+  const agentBadge = document.getElementById('agent-state-badge');
+  const agentResults = document.getElementById('agent-results');
+  const btnAgentStop = document.getElementById('btn-agent-stop');
 
-    const statusEl = document.getElementById('mimic-status');
-    statusEl.textContent = 'Replaying...';
+  Advanced.setOnStatus((entry) => {
+    agentStatusCard.style.display = 'block';
+    agentBadge.textContent = entry.state;
+    agentBadge.className = 'agent-badge agent-' + entry.state;
 
-    try {
-      const result = await Announcements.replayToDevice(captureId);
-      statusEl.textContent = `Done: ${result.written} written, ${result.skipped} skipped, ${result.failed} failed`;
-      statusEl.style.color = 'var(--accent-green)';
-    } catch (err) {
-      statusEl.textContent = `Failed: ${err.message}`;
-      statusEl.style.color = 'var(--accent-red)';
+    const line = document.createElement('div');
+    line.className = 'agent-feed-line';
+    line.innerHTML = `<span class="agent-feed-time">${new Date(entry.time).toLocaleTimeString()}</span>
+      <span class="agent-feed-msg">${escapeHtml(entry.message)}</span>`;
+    agentFeed.appendChild(line);
+    agentFeed.scrollTop = agentFeed.scrollHeight;
+
+    // Show results when complete
+    if (entry.state === 'complete' && entry.data && entry.data.analysis) {
+      renderAgentResults(entry.data);
     }
+
+    // Update button states
+    const isRunning = Advanced.isRunning();
+    btnAgentStop.disabled = !isRunning;
+    document.getElementById('btn-agent-full').disabled = isRunning;
+    document.getElementById('btn-agent-quick').disabled = isRunning;
   });
 
-  function renderCaptures() {
-    const list = document.getElementById('captured-list');
-    const mimicCard = document.getElementById('mimic-card');
-    const mimicSelect = document.getElementById('mimic-select');
-    const mimicBtn = document.getElementById('btn-mimic');
-    const captures = Announcements.getCaptures();
+  document.getElementById('btn-agent-full').addEventListener('click', async () => {
+    agentFeed.innerHTML = '';
+    agentResultsCard.style.display = 'none';
+    await Advanced.runFullDiscovery();
+    renderDeviceList();
+  });
 
-    if (captures.length === 0) {
-      list.innerHTML = '<div class="empty-state">No captured data yet. Connect to a device first.</div>';
-      mimicCard.style.display = 'none';
-      return;
+  document.getElementById('btn-agent-quick').addEventListener('click', async () => {
+    agentFeed.innerHTML = '';
+    agentResultsCard.style.display = 'none';
+    await Advanced.quickScan();
+    renderDeviceList();
+  });
+
+  btnAgentStop.addEventListener('click', () => {
+    Advanced.stop();
+  });
+
+  function renderAgentResults(data) {
+    if (!data.analysis) return;
+    agentResultsCard.style.display = 'block';
+
+    let html = '<div class="agent-results-section">';
+    html += '<h3>Summary</h3>';
+    html += '<ul>' + data.analysis.summary.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
+
+    if (data.analysis.riskFactors.length > 0) {
+      html += '<h3>Findings</h3>';
+      html += '<ul class="agent-risks">' +
+        data.analysis.riskFactors.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
     }
 
-    list.innerHTML = captures.map(cap => `
-      <div class="captured-item">
-        <h3>${escapeHtml(cap.deviceName)}</h3>
-        <p class="captured-detail">Captured: ${new Date(cap.timestamp).toLocaleString()}</p>
-        <p class="captured-detail">Services: ${cap.services.length} | Chars: ${cap.totalChars} (${cap.readableChars} readable)</p>
-        ${cap.services.map(s => `
-          <p class="captured-detail">  ${escapeHtml(s.name)}: ${s.characteristics.length} chars</p>
-        `).join('')}
-        <div style="margin-top:8px;display:flex;gap:6px;">
-          <button class="btn btn-secondary btn-small btn-export-capture" data-capture-id="${cap.id}">Export JSON</button>
-        </div>
-      </div>
-    `).join('');
+    html += '<h3>Recommendations</h3>';
+    html += '<ul>' + data.analysis.recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
+    html += '</div>';
 
-    // Export buttons
-    list.querySelectorAll('.btn-export-capture').forEach(btn => {
-      btn.addEventListener('click', () => {
-        Announcements.exportCapture(btn.dataset.captureId);
-      });
-    });
-
-    // Mimic section
-    mimicCard.style.display = 'block';
-    mimicSelect.innerHTML = '<option value="">Select captured profile...</option>' +
-      captures.map(c => `<option value="${c.id}">${escapeHtml(c.deviceName)} (${new Date(c.timestamp).toLocaleTimeString()})</option>`).join('');
-
-    mimicSelect.addEventListener('change', () => {
-      mimicBtn.disabled = !mimicSelect.value || !BluetoothScanner.getConnectedDevice();
-    });
+    agentResults.innerHTML = html;
   }
 
   // --- Log Tab ---
@@ -353,24 +469,5 @@ document.addEventListener('DOMContentLoaded', () => {
     Logger.clear();
   });
 
-  // --- Rick Roll ---
-  document.getElementById('btn-close-rickroll').addEventListener('click', () => {
-    RickRoll.dismiss();
-  });
-
-  // --- Utilities ---
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  function isPrintable(str) {
-    return /^[\x20-\x7E]+$/.test(str);
-  }
-
-  // Periodically update capture button state
-  setInterval(updateCaptureButton, 2000);
-
-  Logger.info('Ready. Tap "Scan for Devices" to begin.');
+  Logger.info('Ready. Use Bluefy browser on iOS for full BLE support.');
 });
