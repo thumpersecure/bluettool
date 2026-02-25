@@ -4,6 +4,13 @@
  * Optimized for Bluefy browser on iOS.
  */
 document.addEventListener('DOMContentLoaded', () => {
+  // --- DOM Cache (avoids repeated getElementById in hot paths) ---
+  const $cache = {};
+  const $ = (id) => {
+    if (!$cache[id]) $cache[id] = document.getElementById(id);
+    return $cache[id];
+  };
+
   // --- Shared Utilities ---
   function escapeHtml(str) {
     if (!str) return '';
@@ -45,6 +52,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (dev?.deviceType === 'govee_light') return 'Govee Light';
     if (dev?.deviceType === 'smart_light') return 'Smart Light';
     return '';
+  }
+
+  function getWritableCount(dev) {
+    return (dev?.characteristics || []).filter(ch =>
+      ch.properties?.includes('write') || ch.properties?.includes('writeNoResp')
+    ).length;
+  }
+
+  function findDeviceAndChar(deviceId, charUuid) {
+    const freshDevices = BluetoothScanner.getDevices();
+    const d = freshDevices.find(x => x.id === deviceId);
+    if (!d) return null;
+    const charInfo = (d.characteristics || []).find(c =>
+      normalizeUuid(c.uuid) === normalizeUuid(charUuid)
+    );
+    return charInfo ? { device: d, charInfo } : null;
   }
 
   function isValidServiceFilter(value) {
@@ -157,7 +180,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Settings (localStorage) ---
+  // Use bluettool_* prefix for any new localStorage keys (e.g. bluettool_call_history, bluettool_captures)
   const SETTINGS_KEY = 'bluettool_settings';
+  const FAVORITES_KEY = 'bluettool_favorites';
+  const LAST_CONNECTED_KEY = 'bluettool_last_connected';
   const DEFAULT_SETTINGS = {
     themeDark: true,
     persistVolume: true,
@@ -182,6 +208,39 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     } catch (_) { /* ignore */ }
+  }
+
+  function loadFavorites() {
+    try {
+      const raw = localStorage.getItem(FAVORITES_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveFavorites(ids) {
+    try {
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids));
+    } catch (_) { /* ignore */ }
+  }
+
+  function toggleFavorite(deviceId) {
+    const favs = loadFavorites();
+    const idx = favs.indexOf(deviceId);
+    if (idx >= 0) {
+      favs.splice(idx, 1);
+    } else {
+      favs.push(deviceId);
+    }
+    saveFavorites(favs);
+    renderDeviceList();
+  }
+
+  function isFavorite(deviceId) {
+    return loadFavorites().includes(deviceId);
   }
 
   function applySettings(settings) {
@@ -262,14 +321,46 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Empty state CTA: Go to Scan
+  // Empty state CTA: Go to Scan, Go to Devices
   document.addEventListener('click', (e) => {
     if (e.target.closest('#empty-cta-scan')) {
       const scanTab = document.querySelector('.tab[data-tab="scanner"]');
       if (scanTab) scanTab.click();
     }
     if (e.target.closest('#empty-cta-import-calls')) {
-      document.getElementById('call-import-input')?.click();
+      $('call-import-input')?.click();
+    }
+    if (e.target.closest('#empty-cta-devices')) {
+      const devicesTab = document.querySelector('.tab[data-tab="devices"]');
+      if (devicesTab) devicesTab.click();
+    }
+  });
+
+  // Device list: event delegation (single listener, no re-binding on re-render)
+  $('device-list')?.addEventListener('click', (e) => {
+    const reconnectBtn = e.target.closest('.btn-reconnect');
+    if (reconnectBtn) {
+      e.stopPropagation();
+      reconnectBtn.disabled = true;
+      reconnectBtn.textContent = 'Connecting...';
+      BluetoothScanner.connect(reconnectBtn.dataset.deviceId)
+        .then(() => renderDeviceList())
+        .catch(() => {
+          reconnectBtn.disabled = false;
+          reconnectBtn.textContent = 'Reconnect';
+          showToast('Connection failed', 'error');
+        });
+      return;
+    }
+    const lightTestBtn = e.target.closest('.btn-light-test');
+    if (lightTestBtn) {
+      e.stopPropagation();
+      runLightTestAction(lightTestBtn.dataset.deviceId, lightTestBtn.dataset.action, lightTestBtn);
+      return;
+    }
+    const deviceItem = e.target.closest('.device-item');
+    if (deviceItem && !e.target.closest('.device-quick-actions .btn')) {
+      showDeviceDetail(deviceItem.dataset.deviceId);
     }
   });
 
@@ -393,19 +484,14 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('Device list refreshed', 'info');
   });
 
-  document.getElementById('device-sort')?.addEventListener('change', () => {
+  function onDeviceListPrefChange(sortOrFilter, key) {
     renderDeviceList();
     const s = getCurrentSettings();
-    s.defaultSort = document.getElementById('device-sort').value;
+    s[key] = $('device-' + sortOrFilter)?.value || s[key];
     saveSettings(s);
-  });
-
-  document.getElementById('device-filter')?.addEventListener('change', () => {
-    renderDeviceList();
-    const s = getCurrentSettings();
-    s.defaultFilter = document.getElementById('device-filter').value;
-    saveSettings(s);
-  });
+  }
+  $('device-sort')?.addEventListener('change', () => onDeviceListPrefChange('sort', 'defaultSort'));
+  $('device-filter')?.addEventListener('change', () => onDeviceListPrefChange('filter', 'defaultFilter'));
 
   document.getElementById('btn-clear-devices')?.addEventListener('click', async () => {
     const devices = BluetoothScanner.getDevices();
@@ -425,8 +511,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function getFilteredAndSortedDevices() {
     const devices = BluetoothScanner.getDevices();
-    const filterVal = document.getElementById('device-filter')?.value || 'all';
-    const sortVal = document.getElementById('device-sort')?.value || 'date-desc';
+    const filterVal = $('device-filter')?.value || 'all';
+    const sortVal = $('device-sort')?.value || 'date-desc';
+    const favs = loadFavorites();
 
     let filtered = devices;
     if (filterVal === 'connected') {
@@ -436,6 +523,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const sorted = [...filtered].sort((a, b) => {
+      const aPinned = favs.includes(a.id);
+      const bPinned = favs.includes(b.id);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
       const nameA = getDisplayName(a).toLowerCase();
       const nameB = getDisplayName(b).toLowerCase();
       const dateA = new Date(a.discovered).getTime();
@@ -449,11 +540,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderDeviceList() {
-    const list = document.getElementById('device-list');
+    const list = $('device-list');
+    if (!list) return;
     const allDevices = BluetoothScanner.getDevices();
     const devices = getFilteredAndSortedDevices();
 
-    const countEl = document.getElementById('device-count');
+    const countEl = $('device-count');
     if (countEl) {
       countEl.textContent = `${allDevices.length} device${allDevices.length !== 1 ? 's' : ''}`;
     }
@@ -490,13 +582,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const deviceTypeLabel = getDeviceTypeLabel(dev);
       const plan = dev.lightTestPlan;
       const hasLightPlan = !!(plan?.available);
-      const writableCount = (dev.characteristics || []).filter(ch =>
-        ch.properties?.includes('write') || ch.properties?.includes('writeNoResp')
-      ).length;
+      const writableCount = getWritableCount(dev);
+      const pinned = isFavorite(dev.id);
+      const hasNotes = !!getDeviceNotes(dev.id);
       return `
       <div class="device-item" data-device-id="${escapeHtml(dev.id)}">
         <div class="device-item-header">
+          <button class="btn btn-ghost btn-pin" data-device-id="${escapeHtml(dev.id)}" title="${pinned ? 'Unpin' : 'Pin to top'}" aria-label="${pinned ? 'Unpin' : 'Pin to top'}">${pinned ? '&#128204;' : '&#128205;'}</button>
           <span class="device-name">${escapeHtml(displayName)}</span>
+          ${hasNotes ? '<span class="device-note-badge" title="Has notes">&#x1F4DD;</span>' : ''}
           ${dev.connected ? '<span class="conn-badge">Connected</span>' : ''}
         </div>
         <div class="device-id-row">
@@ -525,39 +619,6 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     }).join('');
 
-    // Click on device item -> detail
-    list.querySelectorAll('.device-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        // Don't open detail if clicking a button
-        if (e.target.closest('.device-quick-actions .btn')) return;
-        showDeviceDetail(item.dataset.deviceId);
-      });
-    });
-
-    // Reconnect buttons
-    list.querySelectorAll('.btn-reconnect').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        btn.disabled = true;
-        btn.textContent = 'Connecting...';
-        try {
-          await BluetoothScanner.connect(btn.dataset.deviceId);
-          renderDeviceList();
-        } catch (_) {
-          btn.disabled = false;
-          btn.textContent = 'Reconnect';
-          showToast('Connection failed', 'error');
-        }
-      });
-    });
-
-    list.querySelectorAll('.btn-light-test').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        await runLightTestAction(btn.dataset.deviceId, btn.dataset.action, btn);
-      });
-    });
-
     // Update captures section
     renderCaptures();
   }
@@ -577,7 +638,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const lightPlan = dev.lightTestPlan;
     nameEl.textContent = displayName;
 
+    const currentNotes = getDeviceNotes(deviceId);
     let html = `
+      <div class="detail-section">
+        <h3>Device Notes</h3>
+        <p class="hint" style="margin-bottom:8px;">Add notes for this device (saved locally).</p>
+        <textarea id="device-notes-input" class="input-field device-notes-textarea" placeholder="e.g. Tested on 2024-01-15, firmware v2.1..." rows="3">${escapeHtml(currentNotes)}</textarea>
+        <button class="btn btn-secondary btn-small" id="btn-save-device-notes">Save Notes</button>
+      </div>
       <div class="detail-section">
         <h3>Device Info</h3>
         <div class="detail-row">
@@ -649,9 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       `;
     } else {
-      const writableCount = (dev.characteristics || []).filter(ch =>
-        ch.properties?.includes('write') || ch.properties?.includes('writeNoResp')
-      ).length;
+      const writableCount = getWritableCount(dev);
       html += `
       <div class="detail-section light-test-section">
         <h3>Smart Light Test Commands</h3>
@@ -734,6 +800,17 @@ document.addEventListener('DOMContentLoaded', () => {
     panel.classList.remove('hidden');
 
     // --- Bind detail panel buttons ---
+    const saveNotesBtn = document.getElementById('btn-save-device-notes');
+    if (saveNotesBtn) {
+      saveNotesBtn.addEventListener('click', () => {
+        const input = document.getElementById('device-notes-input');
+        const notes = input?.value?.trim() || '';
+        setDeviceNotes(deviceId, notes);
+        showToast(notes ? 'Notes saved' : 'Notes cleared', 'success');
+        renderDeviceList();
+      });
+    }
+
     const connectBtn = document.getElementById('btn-detail-connect');
     if (connectBtn) {
       connectBtn.addEventListener('click', async () => {
@@ -798,16 +875,12 @@ document.addEventListener('DOMContentLoaded', () => {
     content.querySelectorAll('.btn-char-read').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const charUuid = btn.dataset.charUuid;
-        const freshDevices = BluetoothScanner.getDevices();
-        const d = freshDevices.find(x => x.id === btn.dataset.deviceId);
-        if (!d) return;
-        const charInfo = (d.characteristics || []).find(c => normalizeUuid(c.uuid) === normalizeUuid(charUuid));
-        if (!charInfo) return;
+        const found = findDeviceAndChar(btn.dataset.deviceId, btn.dataset.charUuid);
+        if (!found) return;
         btn.disabled = true;
         btn.textContent = 'Reading...';
         try {
-          await BluetoothScanner.readCharacteristic(charInfo);
+          await BluetoothScanner.readCharacteristic(found.charInfo);
           showDeviceDetail(deviceId);
         } catch (_) {
           btn.disabled = false;
@@ -821,18 +894,12 @@ document.addEventListener('DOMContentLoaded', () => {
     content.querySelectorAll('.btn-char-notify').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const charUuid = btn.dataset.charUuid;
-        const freshDevices = BluetoothScanner.getDevices();
-        const d = freshDevices.find(x => x.id === btn.dataset.deviceId);
-        if (!d) return;
-        const charInfo = (d.characteristics || []).find(c => normalizeUuid(c.uuid) === normalizeUuid(charUuid));
-        if (!charInfo) return;
+        const found = findDeviceAndChar(btn.dataset.deviceId, btn.dataset.charUuid);
+        if (!found) return;
         btn.disabled = true;
         btn.textContent = 'Subscribing...';
         try {
-          await BluetoothScanner.subscribeNotifications(charInfo, () => {
-            showDeviceDetail(deviceId);
-          });
+          await BluetoothScanner.subscribeNotifications(found.charInfo, () => showDeviceDetail(deviceId));
           btn.textContent = 'Subscribed';
           showToast('Subscribed to notifications', 'success');
         } catch (_) {
@@ -861,16 +928,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!input) return;
         const hexVal = input.value.trim();
         if (!hexVal) { showToast('Enter a hex value first', 'error'); return; }
-        // Validate hex
         if (!isValidHexInput(hexVal)) {
           showToast('Invalid hex format. Use an even number of bytes (e.g., FF or 01:FF:AB).', 'error');
           return;
         }
-        const freshDevices = BluetoothScanner.getDevices();
-        const d = freshDevices.find(x => x.id === btn.dataset.deviceId);
-        if (!d) return;
-        const charInfo = (d.characteristics || []).find(c => normalizeUuid(c.uuid) === normalizeUuid(charUuid));
-        if (!charInfo) return;
+        const found = findDeviceAndChar(btn.dataset.deviceId, charUuid);
+        if (!found) return;
+        const { charInfo } = found;
         btn.disabled = true;
         btn.textContent = 'Writing...';
         try {
@@ -878,7 +942,6 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast('Value written', 'success');
           btn.textContent = 'Sent!';
           setTimeout(() => { btn.textContent = 'Send'; btn.disabled = false; }, 1500);
-          // Re-read to see updated value
           if ((charInfo.properties || []).includes('read')) {
             try {
               await BluetoothScanner.readCharacteristic(charInfo);
@@ -898,48 +961,69 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('device-detail')?.classList.add('hidden');
   });
 
-  // --- Captures / Replay ---
+  // --- Captures / Replay (Replay tab) ---
+  const captureImportInput = document.getElementById('capture-import-input');
+  const btnImportCaptures = document.getElementById('btn-import-captures');
+  btnImportCaptures?.addEventListener('click', () => captureImportInput?.click());
+  captureImportInput?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const count = await Announcements.importCapture(file);
+      renderCaptures();
+      if (count === 0) {
+        showToast('No valid profiles found in file', 'info');
+      } else {
+        showToast(`Imported ${count} profile(s)`, 'success');
+      }
+    } catch (err) {
+      showToast(err?.message || 'Import failed', 'error');
+    }
+    captureImportInput.value = '';
+  });
+
   function renderCaptures() {
-    const capturesSection = document.getElementById('captures-section');
     const capturedList = document.getElementById('captured-list');
     const replaySection = document.getElementById('replay-section');
+    const replayEmptyState = document.getElementById('replay-empty-state');
     const mimicSelect = document.getElementById('mimic-select');
+    const mimicBtn = document.getElementById('btn-mimic');
     const captures = Announcements.getCaptures();
 
     if (captures.length === 0) {
-      capturesSection.style.display = 'none';
+      if (replayEmptyState) replayEmptyState.style.display = 'flex';
+      if (replaySection) replaySection.style.display = 'none';
+      if (capturedList) capturedList.innerHTML = '';
       return;
     }
 
-    capturesSection.style.display = 'block';
+    if (replayEmptyState) replayEmptyState.style.display = 'none';
+    if (replaySection) replaySection.style.display = 'block';
 
-    capturedList.innerHTML = captures.map(cap => `
-      <div class="captured-item">
-        <strong>${escapeHtml(cap.deviceName)}</strong>
-        <div class="captured-detail">${new Date(cap.timestamp).toLocaleString()}</div>
-        <div class="captured-detail">Services: ${cap.services.length} | Chars: ${cap.totalChars} (${cap.readableChars} readable)</div>
-        <button class="btn btn-secondary btn-small btn-export-capture" data-capture-id="${cap.id}">Export JSON</button>
-      </div>
-    `).join('');
+    if (capturedList) {
+      capturedList.innerHTML = captures.map(cap => `
+        <div class="captured-item">
+          <strong>${escapeHtml(cap.deviceName)}</strong>
+          <div class="captured-detail">${new Date(cap.timestamp).toLocaleString()}</div>
+          <div class="captured-detail">Services: ${cap.services.length} | Chars: ${cap.totalChars} (${cap.readableChars} readable)</div>
+          <button class="btn btn-secondary btn-small btn-export-capture" data-capture-id="${cap.id}">Export JSON</button>
+        </div>
+      `).join('');
 
-    capturedList.querySelectorAll('.btn-export-capture').forEach(btn => {
-      btn.addEventListener('click', () => {
-        Announcements.exportCapture(btn.dataset.captureId);
-        showToast('JSON exported', 'success');
+      capturedList.querySelectorAll('.btn-export-capture').forEach(btn => {
+        btn.addEventListener('click', () => {
+          Announcements.exportCapture(btn.dataset.captureId);
+          showToast('JSON exported', 'success');
+        });
       });
-    });
-
-    // Replay section
-    const connected = BluetoothScanner.getConnectedDevice();
-    if (connected) {
-      if (replaySection) replaySection.style.display = 'block';
-      if (mimicSelect) {
-        mimicSelect.innerHTML = '<option value="">Select captured profile...</option>' +
-          captures.map(c => `<option value="${c.id}">${escapeHtml(c.deviceName)} (${new Date(c.timestamp).toLocaleTimeString()})</option>`).join('');
-      }
-    } else {
-      if (replaySection) replaySection.style.display = 'none';
     }
+
+    const connected = BluetoothScanner.getConnectedDevice();
+    if (mimicSelect) {
+      mimicSelect.innerHTML = '<option value="">Select captured profile...</option>' +
+        captures.map(c => `<option value="${c.id}">${escapeHtml(c.deviceName)} (${new Date(c.timestamp).toLocaleTimeString()})</option>`).join('');
+    }
+    if (mimicBtn) mimicBtn.disabled = !connected || !mimicSelect?.value;
   }
 
   // Mimic select change — use a single handler, not re-bound each render
@@ -976,27 +1060,47 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- Audio Tab ---
-  document.getElementById('btn-play-dtmf').addEventListener('click', () => {
-    AudioPlayer.playDTMFSequence();
+  // --- Tools Tab: Sound ---
+  document.getElementById('btn-play-dtmf')?.addEventListener('click', () => {
+    if (typeof AudioPlayer === 'undefined') return;
+    const speedEl = document.getElementById('dtmf-speed');
+    const speed = speedEl ? parseFloat(speedEl.value) || 1 : 1;
+    AudioPlayer.playDTMFSequence(speed);
   });
 
-  document.getElementById('btn-play-file').addEventListener('click', () => {
-    AudioPlayer.playFile();
+  document.getElementById('btn-play-custom-dtmf')?.addEventListener('click', () => {
+    const input = document.getElementById('dtmf-custom-input');
+    const seq = input?.value?.trim() || '';
+    if (!seq) {
+      showToast('Enter a DTMF sequence (0-9, *, #, A-D)', 'error');
+      return;
+    }
+    if (!/^[0-9*#A-Da-d]+$/.test(seq)) {
+      showToast('Invalid characters. Use only 0-9, *, #, A-D', 'error');
+      return;
+    }
+    const speedEl = document.getElementById('dtmf-speed');
+    const speed = speedEl ? parseFloat(speedEl.value) || 1 : 1;
+    AudioPlayer.playCustomDTMFSequence(seq, speed);
+    showAudioOverlay();
   });
 
-  document.getElementById('btn-stop-audio').addEventListener('click', () => {
-    AudioPlayer.stopAll();
+  document.getElementById('btn-play-file')?.addEventListener('click', () => {
+    if (typeof AudioPlayer !== 'undefined') AudioPlayer.playFile();
+  });
+
+  document.getElementById('btn-stop-audio')?.addEventListener('click', () => {
+    if (typeof AudioPlayer !== 'undefined') AudioPlayer.stopAll();
     showToast('Audio stopped', 'info');
   });
 
   // Volume slider
   const volumeSlider = document.getElementById('volume-slider');
   const volumeValue = document.getElementById('volume-value');
-  volumeSlider.addEventListener('input', () => {
+  volumeSlider?.addEventListener('input', () => {
     const vol = parseInt(volumeSlider.value, 10);
-    AudioPlayer.setVolume(vol / 100);
-    volumeValue.textContent = vol + '%';
+    if (typeof AudioPlayer !== 'undefined') AudioPlayer.setVolume(vol / 100);
+    if (volumeValue) volumeValue.textContent = vol + '%';
     const s = getCurrentSettings();
     if (s.persistVolume) {
       s.volume = vol;
@@ -1004,7 +1108,86 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('btn-silence-all').addEventListener('click', async () => {
+  // --- Tools Tab: Lights (Flash All, Turn Off All, Set Color) ---
+  async function runLightActionOnAllDevices(action, colorHex) {
+    let devices = BluetoothScanner.getDevices().filter(d => d.connected && d.lightTestPlan?.available);
+    if (action === 'color' && colorHex) {
+      devices = devices.filter(d => d.lightTestPlan?.actions?.color);
+    }
+    if (devices.length === 0) {
+      showToast(action === 'color'
+        ? 'No connected RGB lights. Connect color-capable lights in Devices tab first.'
+        : 'No connected smart lights. Connect lights in Devices tab first.', 'error');
+      return;
+    }
+    let success = 0;
+    let fail = 0;
+    for (const dev of devices) {
+      try {
+        if (action === 'color' && colorHex) {
+          await runLightTestActionWithColor(dev.id, colorHex);
+        } else {
+          await runLightTestAction(dev.id, action, null);
+        }
+        success++;
+      } catch (err) {
+        fail++;
+      }
+    }
+    showToast(`Lights: ${success} ok, ${fail} failed`, success > 0 ? 'success' : 'error');
+  }
+
+  async function runLightTestActionWithColor(deviceId, hexColor) {
+    const devices = BluetoothScanner.getDevices();
+    const dev = devices.find(d => d.id === deviceId);
+    if (!dev || !dev.connected) throw new Error('Device not connected');
+    const plan = dev.lightTestPlan;
+    if (!plan?.available || !plan.targetCharUuid) throw new Error('No light plan');
+    const targetChar = (dev.characteristics || []).find(ch =>
+      normalizeUuid(ch.uuid) === normalizeUuid(plan.targetCharUuid)
+    );
+    if (!targetChar) throw new Error('Characteristic not found');
+    const hex = String(hexColor || '#ff0000').replace(/^#/, '').slice(0, 6);
+    if (hex.length < 6) throw new Error('Invalid color format');
+    const r = Math.min(255, Math.max(0, parseInt(hex.slice(0, 2), 16) || 0));
+    const g = Math.min(255, Math.max(0, parseInt(hex.slice(2, 4), 16) || 0));
+    const b = Math.min(255, Math.max(0, parseInt(hex.slice(4, 6), 16) || 0));
+    const colorHex = [r, g, b].map(v => v.toString(16).padStart(2, '0')).join(':');
+    await BluetoothScanner.writeCharacteristic(targetChar, colorHex);
+  }
+
+  document.getElementById('btn-flash-all-lights')?.addEventListener('click', async () => {
+    await runLightActionOnAllDevices('flash');
+  });
+
+  document.getElementById('btn-off-all-lights')?.addEventListener('click', async () => {
+    await runLightActionOnAllDevices('off');
+  });
+
+  document.getElementById('btn-set-color-all-lights')?.addEventListener('click', async () => {
+    const hexInput = document.getElementById('light-color-hex');
+    const picker = document.getElementById('light-color-picker');
+    const hex = (hexInput?.value || picker?.value || '#ff0000').trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
+      showToast('Enter valid hex color (e.g. #ff0000)', 'error');
+      return;
+    }
+    await runLightActionOnAllDevices('color', hex);
+  });
+
+  const lightColorPicker = document.getElementById('light-color-picker');
+  const lightColorHex = document.getElementById('light-color-hex');
+  lightColorPicker?.addEventListener('input', () => {
+    if (lightColorHex) lightColorHex.value = lightColorPicker.value;
+  });
+  lightColorHex?.addEventListener('input', () => {
+    const v = lightColorHex.value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(v) && lightColorPicker) {
+      lightColorPicker.value = v;
+    }
+  });
+
+  document.getElementById('btn-silence-all')?.addEventListener('click', async () => {
     const devices = BluetoothScanner.getDevices();
     const connCount = devices.filter(d => d.connected).length;
     if (connCount > 0) {
@@ -1050,10 +1233,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (overlay) overlay.classList.remove('hidden');
   }
 
-  document.getElementById('btn-close-audio-overlay').addEventListener('click', () => {
+  document.getElementById('btn-close-audio-overlay')?.addEventListener('click', () => {
     const overlay = document.getElementById('audio-overlay');
     if (overlay) overlay.classList.add('hidden');
-    AudioPlayer.stopAll();
+    if (typeof AudioPlayer !== 'undefined') AudioPlayer.stopAll();
   });
 
   // --- Advanced / Agent Tab ---
@@ -1081,11 +1264,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateAgentButtons() {
     const running = Advanced.isRunning();
-    btnAgentStop.disabled = !running;
-    btnAgentStopAll.disabled = !running;
-    btnAgentFull.disabled = running;
-    btnAgentQuick.disabled = running;
-    btnAgentParallel.disabled = running;
+    if (btnAgentStop) btnAgentStop.disabled = !running;
+    if (btnAgentStopAll) btnAgentStopAll.disabled = !running;
+    if (btnAgentFull) btnAgentFull.disabled = running;
+    if (btnAgentQuick) btnAgentQuick.disabled = running;
+    if (btnAgentParallel) btnAgentParallel.disabled = running;
   }
 
   function renderAgentPoolList() {
@@ -1129,17 +1312,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   Advanced.setOnStatus((entry) => {
-    agentStatusCard.style.display = 'block';
-    agentBadge.textContent = entry.state;
-    agentBadge.className = 'agent-badge agent-' + entry.state;
+    if (agentStatusCard) agentStatusCard.style.display = 'block';
+    if (agentBadge) {
+      agentBadge.textContent = entry.state;
+      agentBadge.className = 'agent-badge agent-' + entry.state;
+    }
 
     const line = document.createElement('div');
     line.className = 'agent-feed-line';
     const prefix = entry.agentId ? `[#${entry.agentId}] ` : '';
     line.innerHTML = `<span class="agent-feed-time">${new Date(entry.time).toLocaleTimeString()}</span>
       <span class="agent-feed-msg">${escapeHtml(prefix + entry.message)}</span>`;
-    agentFeed.appendChild(line);
-    agentFeed.scrollTop = agentFeed.scrollHeight;
+    if (agentFeed) {
+      agentFeed.appendChild(line);
+      agentFeed.scrollTop = agentFeed.scrollHeight;
+    }
 
     if (entry.state === 'complete' && entry.data && entry.data.analysis && !entry.data.agentResults) {
       renderAgentResults(entry.data);
@@ -1538,12 +1725,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Log Tab ---
-  document.getElementById('btn-copy-log').addEventListener('click', () => {
+  document.getElementById('btn-copy-log')?.addEventListener('click', () => {
     Logger.copyToClipboard();
     showToast('Log copied to clipboard', 'success');
   });
 
-  document.getElementById('btn-clear-log').addEventListener('click', async () => {
+  document.getElementById('btn-clear-log')?.addEventListener('click', async () => {
     const confirmed = await showConfirm('Clear Log', 'Clear all log entries?');
     if (!confirmed) return;
     Logger.clear();
@@ -1558,4 +1745,5 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   Logger.info('Ready. Use Bluefy browser on iOS for full BLE support.');
+  renderCaptures(); // Initial Replay tab state
 });
