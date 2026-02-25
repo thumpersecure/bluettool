@@ -786,6 +786,173 @@ body {
   to { transform: translateY(0); opacity: 1; }
 }
 
+/* ===== Toast Notifications ===== */
+#toast-container {
+  position: fixed;
+  top: calc(var(--safe-top) + 4px);
+  left: 12px;
+  right: 12px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: auto;
+  text-align: center;
+}
+
+.toast-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast-hide {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.toast-info {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--accent-cyan);
+}
+
+.toast-success {
+  background: rgba(0, 230, 118, 0.12);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+  color: var(--accent-green);
+}
+
+.toast-error {
+  background: rgba(255, 82, 82, 0.12);
+  border: 1px solid rgba(255, 82, 82, 0.3);
+  color: var(--accent-red);
+}
+
+/* ===== Confirm Dialog ===== */
+.confirm-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.confirm-buttons .btn {
+  flex: 1;
+}
+
+/* ===== Volume Control ===== */
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.volume-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.volume-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 2px;
+  outline: none;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  cursor: pointer;
+}
+
+.volume-value {
+  font-size: 12px;
+  color: var(--text-hint);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ===== Write Form ===== */
+.char-write-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.char-write-form.hidden {
+  display: none;
+}
+
+.char-write-input {
+  flex: 1;
+  margin-bottom: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+}
+
+/* ===== Enhanced Empty State ===== */
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: var(--text-hint);
+  margin-top: 4px;
+}
+
+/* ===== Device Quick Actions ===== */
+.device-quick-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+}
+
+/* ===== Device List Header ===== */
+.device-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.device-list-header h2 {
+  margin-bottom: 0;
+}
+
+/* ===== Mimic Status ===== */
+.mimic-status {
+  font-size: 12px;
+  margin-top: 6px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  color: var(--text-secondary);
+}
+
+.mimic-success { color: var(--accent-green); }
+.mimic-error { color: var(--accent-red); }
+
 /* ===== Scrollbar ===== */
 ::-webkit-scrollbar {
   width: 3px;

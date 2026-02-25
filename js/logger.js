@@ -16,6 +16,8 @@ const Logger = (() => {
       '.' + String(now.getMilliseconds()).padStart(3, '0');
   }
 
+  const MAX_ENTRIES = 500;
+
   function addEntry(level, message, data) {
     const entry = {
       time: timestamp(),
@@ -24,6 +26,15 @@ const Logger = (() => {
       data: data || null
     };
     entries.push(entry);
+    // Prune oldest entries to prevent memory growth
+    if (entries.length > MAX_ENTRIES) {
+      entries.splice(0, entries.length - MAX_ENTRIES);
+      if (logContainer && logContainer.children.length > MAX_ENTRIES) {
+        while (logContainer.children.length > MAX_ENTRIES) {
+          logContainer.removeChild(logContainer.firstChild);
+        }
+      }
+    }
     renderEntry(entry);
     return entry;
   }

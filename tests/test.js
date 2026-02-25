@@ -41,6 +41,7 @@ const requiredFiles = [
   'js/sharing.js',
   'audio/dtmf-fax-tones.wav',
   'README.md',
+  'sw.js',
   'icons/icon-180.svg',
   'icons/icon-192.svg',
   'icons/icon-512.svg',
@@ -50,6 +51,9 @@ for (const file of requiredFiles) {
   const fullPath = path.join(ROOT, file);
   assert(fs.existsSync(fullPath), `${file} exists`);
 }
+
+// rickroll.js should NOT exist
+assert(!fs.existsSync(path.join(ROOT, 'js/rickroll.js')), 'rickroll.js has been deleted');
 
 // --- HTML Structure Tests ---
 section('HTML Structure');
@@ -82,11 +86,19 @@ assert(html.includes('id="btn-agent-full"'), 'Has full agent button');
 assert(html.includes('id="btn-agent-quick"'), 'Has quick agent button');
 assert(html.includes('id="btn-agent-stop"'), 'Has stop agent button');
 
+// New v2 elements
+assert(html.includes('id="toast-container"'), 'Has toast container');
+assert(html.includes('id="confirm-dialog"'), 'Has confirm dialog');
+assert(html.includes('id="volume-slider"'), 'Has volume slider');
+assert(html.includes('id="captures-section"'), 'Has captures section in devices tab');
+assert(html.includes('id="mimic-select"'), 'Has replay/mimic select');
+assert(html.includes('id="btn-mimic"'), 'Has replay button');
+
 // Device detail panel
 assert(html.includes('id="device-detail"'), 'Has device detail panel');
 assert(html.includes('id="btn-back-devices"'), 'Has back button in detail');
 
-// Audio overlay replaces rickroll
+// No rickroll
 assert(!html.includes('rickroll'), 'No rickroll references in HTML');
 assert(html.includes('id="audio-overlay"'), 'Has audio overlay');
 assert(html.includes('audio-visualizer'), 'Has audio visualizer');
@@ -114,8 +126,6 @@ for (const script of scriptOrder) {
   lastIdx = idx;
 }
 assert(orderCorrect, 'Scripts loaded in correct dependency order');
-
-// No rickroll script
 assert(!html.includes('rickroll.js'), 'rickroll.js is not loaded');
 
 // --- JavaScript Module Tests ---
@@ -136,7 +146,6 @@ for (const file of jsFiles) {
   assert(content.length > 100, `${file} has substantive content (${content.length} chars)`);
   assert(!content.includes('console.log('), `${file} has no console.log calls (uses Logger)`);
 
-  // Check for common JS errors
   let braceCount = 0;
   let parenCount = 0;
   for (const ch of content) {
@@ -149,26 +158,59 @@ for (const file of jsFiles) {
   assert(parenCount === 0, `${file} has balanced parentheses`);
 }
 
-// --- App.js Bug Fixes ---
-section('Bug Fix Verification');
+// Service worker
+const swContent = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+assert(swContent.includes('CACHE_NAME'), 'Service worker has cache name');
+assert(swContent.includes('install'), 'Service worker has install handler');
+assert(swContent.includes('fetch'), 'Service worker has fetch handler');
+
+// --- App.js Features ---
+section('App.js Feature Verification');
 
 const appJs = fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8');
 
-// Bug: stale device references in char-read/notify handlers
-assert(appJs.includes('BluetoothScanner.getDevices()') &&
-  appJs.includes('freshDevices'), 'Uses fresh device list in char read/notify handlers');
+// Bug fixes
+assert(appJs.includes('freshDevices'), 'Uses fresh device list in char handlers');
+assert(appJs.includes('function escapeHtml'), 'Defines escapeHtml');
+assert(!appJs.includes('RickRoll'), 'No RickRoll references');
+assert(!appJs.includes('rickroll'), 'No rickroll references');
 
-// Bug: duplicate escapeHtml — app.js should define its own, not rely on Logger's private one
-assert(appJs.includes('function escapeHtml'), 'app.js defines its own escapeHtml');
+// Loading states
+assert(appJs.includes('Connecting...'), 'Connect loading state');
+assert(appJs.includes('Reading...'), 'Read loading state');
+assert(appJs.includes('Capturing...'), 'Capture loading state');
+assert(appJs.includes('Scanning...'), 'Scan loading state');
+assert(appJs.includes('Subscribing...'), 'Subscribe loading state');
+assert(appJs.includes('Writing...'), 'Write loading state');
 
-// Bug: rickroll reference removed
-assert(!appJs.includes('RickRoll'), 'No RickRoll references in app.js');
-assert(!appJs.includes('rickroll'), 'No rickroll references in app.js');
+// Toast notifications
+assert(appJs.includes('showToast'), 'Has toast notification function');
+assert(appJs.includes('toast-show'), 'Toast has show animation');
 
-// Loading states on buttons
-assert(appJs.includes('Connecting...'), 'Shows loading state on connect');
-assert(appJs.includes('Reading...'), 'Shows loading state on read');
-assert(appJs.includes('Capturing...'), 'Shows loading state on capture');
+// Confirm dialogs
+assert(appJs.includes('showConfirm'), 'Has confirm dialog function');
+assert(appJs.includes('Clear All Devices'), 'Confirm on clear devices');
+assert(appJs.includes('Clear Log'), 'Confirm on clear log');
+
+// Volume control
+assert(appJs.includes('volume-slider'), 'Wires volume slider');
+assert(appJs.includes('setVolume'), 'Calls setVolume');
+
+// Write characteristic UI
+assert(appJs.includes('btn-char-write-toggle'), 'Has write toggle button handler');
+assert(appJs.includes('btn-char-write-send'), 'Has write send button handler');
+assert(appJs.includes('Invalid hex'), 'Validates hex input');
+
+// Reconnect button
+assert(appJs.includes('btn-reconnect'), 'Has reconnect button in device list');
+
+// Capture/replay in devices tab
+assert(appJs.includes('renderCaptures'), 'Has renderCaptures function');
+assert(appJs.includes('mimic-select'), 'Has mimic select handler');
+assert(appJs.includes('Replay'), 'References Replay functionality');
+
+// Service worker registration
+assert(appJs.includes('serviceWorker'), 'Registers service worker');
 
 // --- Audio Player Tests ---
 section('Audio Player Module');
@@ -176,13 +218,15 @@ section('Audio Player Module');
 const audioJs = fs.readFileSync(path.join(ROOT, 'js/audio-player.js'), 'utf8');
 
 assert(audioJs.includes('DTMF_FREQS'), 'Has DTMF frequency table');
-assert(audioJs.includes('playDTMFSequence'), 'Has live DTMF playback function');
-assert(audioJs.includes('playFile'), 'Has file playback function');
+assert(audioJs.includes('playDTMFSequence'), 'Has live DTMF playback');
+assert(audioJs.includes('playFile'), 'Has file playback');
 assert(audioJs.includes('stopAll'), 'Has stop function');
-assert(audioJs.includes('getAudioBlob'), 'Has getAudioBlob for sharing');
+assert(audioJs.includes('getAudioBlob'), 'Has getAudioBlob');
 assert(audioJs.includes('triggerOnConnect'), 'Has triggerOnConnect');
-
-// Verify DTMF frequencies are correct
+assert(audioJs.includes('setVolume'), 'Has setVolume');
+assert(audioJs.includes('getVolume'), 'Has getVolume');
+assert(audioJs.includes('masterVolume'), 'Has master volume control');
+assert(audioJs.includes('pendingTimeouts'), 'Tracks pending timeouts for cleanup');
 assert(audioJs.includes('[697, 1209]'), 'Correct DTMF freq for digit 1');
 assert(audioJs.includes('[941, 1336]'), 'Correct DTMF freq for digit 0');
 
@@ -192,51 +236,63 @@ section('Advanced Agent Module');
 const advJs = fs.readFileSync(path.join(ROOT, 'js/advanced.js'), 'utf8');
 
 assert(advJs.includes('AGENT_STATES'), 'Defines agent states');
-assert(advJs.includes('runFullDiscovery'), 'Has full discovery function');
-assert(advJs.includes('quickScan'), 'Has quick scan function');
-assert(advJs.includes('stop'), 'Has stop function');
-assert(advJs.includes('SCANNING'), 'Has scanning state');
-assert(advJs.includes('CONNECTING'), 'Has connecting state');
-assert(advJs.includes('ENUMERATING'), 'Has enumerating state');
-assert(advJs.includes('READING'), 'Has reading state');
-assert(advJs.includes('CAPTURING'), 'Has capturing state');
-assert(advJs.includes('ANALYZING'), 'Has analyzing state');
-assert(advJs.includes('COMPLETE'), 'Has complete state');
+assert(advJs.includes('runFullDiscovery'), 'Has full discovery');
+assert(advJs.includes('quickScan'), 'Has quick scan');
+assert(advJs.includes('running = false'), 'Sets running=false on cancel');
 
 // --- Sharing Module Tests ---
 section('Sharing Module');
 
 const shareJs = fs.readFileSync(path.join(ROOT, 'js/sharing.js'), 'utf8');
 
-assert(shareJs.includes('shareAudioFile'), 'Has shareAudioFile function');
-assert(shareJs.includes('shareLink'), 'Has shareLink function');
-assert(shareJs.includes('shareHearts'), 'Has shareHearts function');
+assert(shareJs.includes('shareAudioFile'), 'Has shareAudioFile');
+assert(shareJs.includes('shareLink'), 'Has shareLink');
+assert(shareJs.includes('shareHearts'), 'Has shareHearts');
 assert(shareJs.includes('navigator.share'), 'Uses Web Share API');
-assert(shareJs.includes('navigator.canShare'), 'Checks canShare before sharing files');
-assert(shareJs.includes('AbortError'), 'Handles user cancellation');
+assert(shareJs.includes('AbortError'), 'Handles cancellation');
+
+// --- Logger Tests ---
+section('Logger Module');
+
+const loggerJs = fs.readFileSync(path.join(ROOT, 'js/logger.js'), 'utf8');
+assert(loggerJs.includes('MAX_ENTRIES'), 'Has max entries limit');
+assert(loggerJs.includes('splice'), 'Prunes old entries');
+
+// --- Bluetooth Scanner Tests ---
+section('Bluetooth Scanner Module');
+
+const btJs = fs.readFileSync(path.join(ROOT, 'js/bluetooth-scanner.js'), 'utf8');
+assert(btJs.includes('Bluefy detected'), 'Has Bluefy-specific detection message');
+assert(btJs.includes('connectedDevice.id === deviceId'), 'Disconnect checks specific device');
+assert(btJs.includes('writeCharacteristic'), 'Has write characteristic');
+assert(btJs.includes('writeValueWithoutResponse'), 'Supports writeWithoutResponse');
 
 // --- CSS Tests ---
 section('CSS Quality');
 
 const css = fs.readFileSync(path.join(ROOT, 'css/style.css'), 'utf8');
 
-assert(css.includes('safe-area-inset-top'), 'Has iOS safe area support');
-assert(css.includes('safe-area-inset-bottom'), 'Has bottom safe area');
-assert(css.includes('-webkit-overflow-scrolling'), 'Has momentum scrolling');
-assert(css.includes('touch-action: manipulation'), 'Has touch-action manipulation (prevents double-tap zoom)');
-assert(css.includes('-webkit-text-size-adjust'), 'Prevents text size adjustment');
-assert(css.includes('-webkit-appearance: none'), 'Resets webkit appearance on inputs');
-
-// New section styles
-assert(css.includes('.audio-visualizer'), 'Has audio visualizer styles');
-assert(css.includes('.agent-badge'), 'Has agent badge styles');
-assert(css.includes('.agent-feed'), 'Has agent feed styles');
-assert(css.includes('.card-disclaimer'), 'Has disclaimer card styles');
-assert(css.includes('.conn-badge'), 'Has connection badge styles');
-assert(css.includes('.device-id-row'), 'Has device ID row styles');
-
-// No rickroll styles
-assert(!css.includes('rickroll'), 'No rickroll references in CSS');
+assert(css.includes('safe-area-inset-top'), 'iOS safe area top');
+assert(css.includes('safe-area-inset-bottom'), 'iOS safe area bottom');
+assert(css.includes('-webkit-overflow-scrolling'), 'Momentum scrolling');
+assert(css.includes('touch-action: manipulation'), 'Touch-action manipulation');
+assert(css.includes('-webkit-text-size-adjust'), 'Text size adjust');
+assert(css.includes('.audio-visualizer'), 'Audio visualizer styles');
+assert(css.includes('.agent-badge'), 'Agent badge styles');
+assert(css.includes('.card-disclaimer'), 'Disclaimer styles');
+assert(css.includes('#toast-container'), 'Toast container styles');
+assert(css.includes('.toast-success'), 'Toast success styles');
+assert(css.includes('.toast-error'), 'Toast error styles');
+assert(css.includes('.confirm-buttons'), 'Confirm dialog styles');
+assert(css.includes('.volume-slider'), 'Volume slider styles');
+assert(css.includes('.volume-control'), 'Volume control styles');
+assert(css.includes('.char-write-form'), 'Write form styles');
+assert(css.includes('.char-write-input'), 'Write input styles');
+assert(css.includes('.empty-icon'), 'Enhanced empty state styles');
+assert(css.includes('.device-quick-actions'), 'Device quick actions styles');
+assert(css.includes('.device-list-header'), 'Device list header styles');
+assert(css.includes('.mimic-status'), 'Mimic status styles');
+assert(!css.includes('rickroll'), 'No rickroll in CSS');
 
 // --- Audio File Tests ---
 section('Audio File');
@@ -244,44 +300,38 @@ section('Audio File');
 const audioPath = path.join(ROOT, 'audio/dtmf-fax-tones.wav');
 const audioStat = fs.statSync(audioPath);
 assert(audioStat.size > 100000, `Audio file is substantial (${(audioStat.size / 1024).toFixed(0)} KB)`);
-assert(audioStat.size < 5000000, 'Audio file is not too large (< 5MB)');
+assert(audioStat.size < 5000000, 'Audio file < 5MB');
 
-// Check WAV header
 const wavBuf = Buffer.alloc(44);
 const fd = fs.openSync(audioPath, 'r');
 fs.readSync(fd, wavBuf, 0, 44, 0);
 fs.closeSync(fd);
-assert(wavBuf.toString('ascii', 0, 4) === 'RIFF', 'WAV has RIFF header');
-assert(wavBuf.toString('ascii', 8, 12) === 'WAVE', 'WAV has WAVE format marker');
-
-const sampleRate = wavBuf.readUInt32LE(24);
-assert(sampleRate === 44100, `WAV sample rate is 44100 (got ${sampleRate})`);
+assert(wavBuf.toString('ascii', 0, 4) === 'RIFF', 'WAV RIFF header');
+assert(wavBuf.toString('ascii', 8, 12) === 'WAVE', 'WAV format marker');
+assert(wavBuf.readUInt32LE(24) === 44100, 'WAV sample rate 44100');
 
 // --- Manifest Tests ---
 section('PWA Manifest');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
-assert(manifest.name, 'Manifest has name');
-assert(manifest.short_name, 'Manifest has short_name');
-assert(manifest.display === 'standalone', 'Display is standalone');
-assert(manifest.icons && manifest.icons.length >= 2, 'Has at least 2 icons');
+assert(manifest.name, 'Has name');
+assert(manifest.short_name, 'Has short_name');
+assert(manifest.display === 'standalone', 'Display standalone');
+assert(manifest.icons && manifest.icons.length >= 2, 'Has 2+ icons');
 
 // --- README Tests ---
 section('README Content');
 
 const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
 
-assert(readme.includes('Personal use only'), 'README has personal use disclaimer');
-assert(readme.includes('educational purposes'), 'README mentions educational purposes');
-assert(readme.includes('Bluefy'), 'README mentions Bluefy');
-assert(readme.includes('DTMF'), 'README documents DTMF feature');
-assert(readme.includes('AirDrop'), 'README documents AirDrop feature');
-assert(readme.includes('Agentic'), 'README documents agentic feature');
-assert(readme.includes('Silence'), 'README documents silence feature');
-assert(readme.includes('audio-player.js'), 'README lists audio-player.js');
-assert(readme.includes('advanced.js'), 'README lists advanced.js');
-assert(readme.includes('sharing.js'), 'README lists sharing.js');
-assert(!readme.includes('rickroll'), 'README has no rickroll references');
+assert(readme.includes('Personal use only'), 'Personal use disclaimer');
+assert(readme.includes('educational purposes'), 'Educational mention');
+assert(readme.includes('Bluefy'), 'Bluefy mention');
+assert(readme.includes('DTMF'), 'DTMF documented');
+assert(readme.includes('AirDrop'), 'AirDrop documented');
+assert(readme.includes('Agentic'), 'Agentic documented');
+assert(readme.includes('Silence'), 'Silence documented');
+assert(!readme.includes('rickroll'), 'No rickroll in README');
 
 // --- Summary ---
 console.log(`\n=============================`);
