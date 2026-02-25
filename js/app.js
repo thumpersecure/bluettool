@@ -37,23 +37,34 @@ document.addEventListener('DOMContentLoaded', () => {
   function showConfirm(title, message) {
     return new Promise(resolve => {
       const dialog = document.getElementById('confirm-dialog');
-      document.getElementById('confirm-title').textContent = title;
-      document.getElementById('confirm-message').textContent = message;
+      const titleEl = document.getElementById('confirm-title');
+      const messageEl = document.getElementById('confirm-message');
+      const okBtn = document.getElementById('confirm-ok');
+      const cancelBtn = document.getElementById('confirm-cancel');
+      if (!dialog || !titleEl || !messageEl || !okBtn || !cancelBtn) {
+        resolve(false);
+        return;
+      }
+      titleEl.textContent = title;
+      messageEl.textContent = message;
       dialog.classList.remove('hidden');
 
       function cleanup(result) {
         dialog.classList.add('hidden');
         okBtn.removeEventListener('click', onOk);
         cancelBtn.removeEventListener('click', onCancel);
+        dialog.removeEventListener('click', onOverlayClick);
         resolve(result);
       }
       function onOk() { cleanup(true); }
       function onCancel() { cleanup(false); }
+      function onOverlayClick(e) {
+        if (e.target === dialog) cleanup(false);
+      }
 
-      const okBtn = document.getElementById('confirm-ok');
-      const cancelBtn = document.getElementById('confirm-cancel');
       okBtn.addEventListener('click', onOk);
       cancelBtn.addEventListener('click', onCancel);
+      dialog.addEventListener('click', onOverlayClick);
     });
   }
 
@@ -82,7 +93,42 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnScan = document.getElementById('btn-scan');
   const btnScanAll = document.getElementById('btn-scan-all');
 
-  btnScan.addEventListener('click', async () => {
+  // Classic Bluetooth (Web Serial)
+  const btnSerialConnect = document.getElementById('btn-serial-connect');
+  const serialStatusEl = document.getElementById('serial-status');
+  if (btnSerialConnect && typeof SerialBluetooth !== 'undefined') {
+    function updateSerialButton() {
+      btnSerialConnect.textContent = SerialBluetooth.isConnected() ? 'Disconnect Classic BT' : 'Connect Classic BT Device';
+    }
+    btnSerialConnect.addEventListener('click', async () => {
+      if (!SerialBluetooth.isSupported()) {
+        showToast('Web Serial not available. Use Chrome 117+ for Classic BT.', 'error');
+        return;
+      }
+      try {
+        if (SerialBluetooth.isConnected()) {
+          await SerialBluetooth.close();
+          if (serialStatusEl) serialStatusEl.textContent = '';
+          updateSerialButton();
+          showToast('Classic BT disconnected', 'info');
+          return;
+        }
+        await SerialBluetooth.requestPort();
+        await SerialBluetooth.open(9600);
+        if (serialStatusEl) serialStatusEl.textContent = 'Connected';
+        updateSerialButton();
+        showToast('Classic BT device connected', 'success');
+      } catch (err) {
+        if (err.name !== 'NotFoundError') {
+          showToast(err?.message || 'Connection failed', 'error');
+        }
+        if (serialStatusEl) serialStatusEl.textContent = '';
+        updateSerialButton();
+      }
+    });
+  }
+
+  btnScan?.addEventListener('click', async () => {
     const options = {};
     const nameFilterEnabled = document.getElementById('filter-name').checked;
     const nameValue = document.getElementById('filter-name-value').value.trim();
@@ -102,23 +148,23 @@ document.addEventListener('DOMContentLoaded', () => {
       await BluetoothScanner.scan(options);
       renderDeviceList();
       showToast('Device found', 'success');
-    } catch (_) {
-      // Error already logged by scanner
+    } catch (err) {
+      showToast(err?.message || 'Scan cancelled or failed', 'error');
     } finally {
       btnScan.disabled = false;
       btnScan.textContent = 'Scan for Devices';
     }
   });
 
-  btnScanAll.addEventListener('click', async () => {
+  btnScanAll?.addEventListener('click', async () => {
     btnScanAll.disabled = true;
     btnScanAll.textContent = 'Scanning...';
     try {
       await BluetoothScanner.scanAll();
       renderDeviceList();
       showToast('Device found', 'success');
-    } catch (_) {
-      // Error already logged
+    } catch (err) {
+      showToast(err?.message || 'Scan cancelled or failed', 'error');
     } finally {
       btnScanAll.disabled = false;
       btnScanAll.textContent = 'Scan All (No Filter)';
@@ -603,20 +649,23 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Sharing ---
-  document.getElementById('btn-share-audio').addEventListener('click', () => {
-    Sharing.shareAudioFile();
+  document.getElementById('btn-share-audio')?.addEventListener('click', async () => {
+    const ok = await Sharing.shareAudioFile();
+    showToast(ok ? 'Audio shared' : 'Audio downloaded (share not available)', ok ? 'success' : 'info');
   });
 
-  document.getElementById('btn-share-hearts').addEventListener('click', () => {
-    Sharing.shareHearts();
+  document.getElementById('btn-share-hearts')?.addEventListener('click', async () => {
+    const ok = await Sharing.shareHearts();
+    showToast(ok ? 'Hearts shared' : 'Hearts copied to clipboard', ok ? 'success' : 'info');
   });
 
-  document.getElementById('btn-share-link').addEventListener('click', () => {
-    Sharing.shareLink(
+  document.getElementById('btn-share-link')?.addEventListener('click', async () => {
+    const ok = await Sharing.shareLink(
       'https://thumpersecure.github.io/bluettool/',
       'BlueTTool',
       'BLE scanner and testing tool for Bluefy on iOS'
     );
+    showToast(ok ? 'Link shared' : 'Link copied to clipboard', ok ? 'success' : 'info');
   });
 
   // --- Audio Overlay ---
@@ -685,21 +734,26 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function renderAgentResults(data) {
-    if (!data.analysis) return;
+    if (!data?.analysis) return;
+    const a = data.analysis;
+    const summary = Array.isArray(a.summary) ? a.summary : [];
+    const riskFactors = Array.isArray(a.riskFactors) ? a.riskFactors : [];
+    const recommendations = Array.isArray(a.recommendations) ? a.recommendations : [];
+
     agentResultsCard.style.display = 'block';
 
     let html = '<div class="agent-results-section">';
     html += '<h3>Summary</h3>';
-    html += '<ul>' + data.analysis.summary.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
+    html += '<ul>' + summary.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
 
-    if (data.analysis.riskFactors.length > 0) {
+    if (riskFactors.length > 0) {
       html += '<h3>Findings</h3>';
       html += '<ul class="agent-risks">' +
-        data.analysis.riskFactors.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
+        riskFactors.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
     }
 
     html += '<h3>Recommendations</h3>';
-    html += '<ul>' + data.analysis.recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
+    html += '<ul>' + recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
     html += '</div>';
 
     agentResultsEl.innerHTML = html;
@@ -762,6 +816,78 @@ document.addEventListener('DOMContentLoaded', () => {
           ${escapeHtml(r.text)}
         </div>
       `).join('');
+  }
+
+  // --- Calls Tab ---
+  const callImportInput = document.getElementById('call-import-input');
+  const btnImportCalls = document.getElementById('btn-import-calls');
+  const btnExportCalls = document.getElementById('btn-export-calls');
+  const btnClearCalls = document.getElementById('btn-clear-calls');
+  const callList = document.getElementById('call-list');
+
+  btnImportCalls?.addEventListener('click', () => callImportInput?.click());
+
+  callImportInput?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const count = await CallHistory.importFromFile(file);
+      renderCallList();
+      showToast(`Imported ${count} call(s)`, 'success');
+    } catch (err) {
+      Logger.error('Call import failed:', err);
+      showToast('Import failed: ' + (err.message || 'Invalid file'), 'error');
+    }
+    callImportInput.value = '';
+  });
+
+  btnExportCalls?.addEventListener('click', () => {
+    const calls = CallHistory.getCalls();
+    if (calls.length === 0) {
+      showToast('No calls to export', 'info');
+      return;
+    }
+    const csv = CallHistory.exportToCSV();
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'call-history.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV exported', 'success');
+  });
+
+  btnClearCalls?.addEventListener('click', async () => {
+    const calls = CallHistory.getCalls();
+    if (calls.length === 0) return;
+    const confirmed = await showConfirm('Clear Call History',
+      `Remove ${calls.length} call(s) from the list?`);
+    if (!confirmed) return;
+    CallHistory.clearCalls();
+    renderCallList();
+    showToast('Call history cleared', 'info');
+  });
+
+  function renderCallList() {
+    if (!callList) return;
+    const calls = typeof CallHistory !== 'undefined' ? CallHistory.getCalls() : [];
+    if (calls.length === 0) {
+      callList.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">&#x1F4DE;</div>
+        <p>No calls imported yet</p>
+        <p class="empty-hint">Import a CSV or JSON file to view call history</p>
+      </div>`;
+      return;
+    }
+    callList.innerHTML = calls.map(c => `
+      <div class="call-item">
+        <span class="call-item-date">${escapeHtml(c.date)}</span>
+        <span class="call-item-number">${escapeHtml(c.name || c.number)}</span>
+        <span class="call-item-duration">${escapeHtml(c.duration)}</span>
+        <span class="call-item-type">${escapeHtml(c.type)}</span>
+      </div>
+    `).join('');
   }
 
   // --- Log Tab ---

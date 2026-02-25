@@ -33,6 +33,7 @@
       <button class="tab active" data-tab="scanner">Scan</button>
       <button class="tab" data-tab="devices">Devices</button>
       <button class="tab" data-tab="audio">Audio</button>
+      <button class="tab" data-tab="calls">Calls</button>
       <button class="tab" data-tab="advanced">Agent</button>
       <button class="tab" data-tab="log">Log</button>
     </nav>
@@ -49,6 +50,12 @@
           <button id="btn-scan-all" class="btn btn-secondary">
             Scan All (No Filter)
           </button>
+        </div>
+        <div id="classic-bt-section" class="filter-section" style="margin-top:12px;">
+          <h3>Classic Bluetooth (Chrome 117+)</h3>
+          <p class="hint">Web Serial API connects to paired Bluetooth Classic devices (RFCOMM/SPP).</p>
+          <button id="btn-serial-connect" class="btn btn-secondary">Connect Classic BT Device</button>
+          <span id="serial-status" class="serial-status"></span>
         </div>
         <div id="scan-filters" class="filter-section">
           <h3>Scan Filters</h3>
@@ -68,6 +75,17 @@
       <div class="card" id="compatibility-card">
         <h2>Browser Compatibility</h2>
         <div id="compat-status"></div>
+      </div>
+
+      <div class="card" id="bluefy-home-screen-card">
+        <h2>Add to Home Screen (Bluefy)</h2>
+        <p class="hint">Save BlueTTool to your iPhone home screen for quick access:</p>
+        <ol class="home-screen-steps">
+          <li>Tap the <strong>Share</strong> button (square with arrow) in Bluefy</li>
+          <li>Scroll and tap <strong>Add to Home Screen</strong></li>
+          <li>Tap <strong>Add</strong> to confirm</li>
+        </ol>
+        <p class="hint">The app will open like a native app from your home screen.</p>
       </div>
 
       <div class="card card-disclaimer">
@@ -172,6 +190,32 @@
       </div>
     </section>
 
+    <!-- Calls Tab -->
+    <section id="calls" class="tab-content">
+      <div class="card">
+        <h2>Call History</h2>
+        <p class="hint">Import call history from your iPhone. Export from Settings &gt; Phone or use a call history backup app, then import the CSV/JSON file here.</p>
+        <div class="call-history-controls">
+          <input type="file" id="call-import-input" accept=".csv,.json,text/csv,application/json" class="input-file-hidden">
+          <button id="btn-import-calls" class="btn btn-primary">Import</button>
+          <button id="btn-export-calls" class="btn btn-secondary">Export CSV</button>
+          <button id="btn-clear-calls" class="btn btn-danger">Clear</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="call-list-header">
+          <h3>Calls</h3>
+        </div>
+        <div id="call-list" class="call-list">
+          <div class="empty-state">
+            <div class="empty-icon">&#x1F4DE;</div>
+            <p>No calls imported yet</p>
+            <p class="empty-hint">Import a CSV or JSON file to view call history</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Advanced / Agent Tab -->
     <section id="advanced" class="tab-content">
       <div class="card">
@@ -252,7 +296,9 @@
   </div>
 
   <script src="js/logger.js"></script>
+  <script src="js/call-history.js"></script>
   <script src="js/bluetooth-scanner.js"></script>
+  <script src="js/serial-bluetooth.js"></script>
   <script src="js/announcements.js"></script>
   <script src="js/audio-player.js"></script>
   <script src="js/vulnerability.js"></script>
