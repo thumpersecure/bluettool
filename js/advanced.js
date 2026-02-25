@@ -298,7 +298,7 @@ const Advanced = (() => {
       emitAgent(agent, AGENT_STATES.CONNECTING, `Connecting to ${deviceInfo.name}...`);
 
       try {
-        await BluetoothScanner.connect(deviceInfo.id);
+        await BluetoothScanner.connect(deviceInfo.id, { source: 'agent', deepReadOnEnumerate: false });
         if (shouldStop()) return results;
         emitAgent(agent, AGENT_STATES.CONNECTING, `Connected to ${deviceInfo.name}`);
       } catch (err) {
@@ -340,7 +340,7 @@ const Advanced = (() => {
       emitAgent(agent, AGENT_STATES.CAPTURING, 'Running capture + vulnerability assessment in parallel...');
       const [captureResult, vulnResult] = await Promise.allSettled([
         (async () => {
-          const profile = await Announcements.captureFromDevice();
+          const profile = await Announcements.captureFromDeviceId(deviceInfo.id, { reRead: false });
           return profile;
         })(),
         (async () => {
@@ -619,7 +619,7 @@ const Advanced = (() => {
       emit(AGENT_STATES.CONNECTING, `Connecting to ${deviceInfo.name}...`);
 
       try {
-        await BluetoothScanner.connect(deviceInfo.id);
+        await BluetoothScanner.connect(deviceInfo.id, { source: 'agent', deepReadOnEnumerate: false });
         if (shouldStop()) return results;
         emit(AGENT_STATES.CONNECTING, `Connected to ${deviceInfo.name}`);
       } catch (err) {
@@ -670,7 +670,7 @@ const Advanced = (() => {
       emit(AGENT_STATES.CAPTURING, 'Running capture + vulnerability assessment in parallel...');
 
       const [captureResult, vulnResult] = await Promise.allSettled([
-        Announcements.captureFromDevice().catch(err => {
+        Announcements.captureFromDeviceId(deviceInfo.id, { reRead: false }).catch(err => {
           emit(AGENT_STATES.ERROR, `Capture failed: ${err.message}`);
           return null;
         }),

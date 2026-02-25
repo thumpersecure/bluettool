@@ -14,10 +14,28 @@ const Announcements = (() => {
    */
   async function captureFromDevice() {
     const deviceInfo = BluetoothScanner.getConnectedDevice();
-    if (!deviceInfo || !deviceInfo.connected) {
+    if (!deviceInfo?.id) {
       Logger.error('No device connected - connect to a device first');
       throw new Error('No device connected');
     }
+    return captureFromDeviceId(deviceInfo.id);
+  }
+
+  /**
+   * Capture a BLE profile snapshot from a specific connected device.
+   * @param {string} deviceId - BluetoothScanner device id
+   * @param {Object} options
+   * @param {boolean} [options.reRead=true] - if true, re-read readable characteristics during capture
+   */
+  async function captureFromDeviceId(deviceId, options = {}) {
+    const deviceInfo = BluetoothScanner.getDevice(deviceId) ||
+      BluetoothScanner.getDevices().find(d => d.id === deviceId);
+    if (!deviceInfo || !deviceInfo.connected) {
+      Logger.error('Device not connected - connect to a device first');
+      throw new Error('No device connected');
+    }
+
+    const reRead = options.reRead !== false;
 
     Logger.info(`Capturing BLE profile from ${deviceInfo.name}...`);
 
@@ -48,8 +66,8 @@ const Announcements = (() => {
           textValue: null
         };
 
-        // Re-read current values
-        if (char.properties.includes('read')) {
+        // Re-read current values (optional)
+        if (reRead && char.properties.includes('read')) {
           try {
             const updated = await BluetoothScanner.readCharacteristic(char);
             charCapture.value = updated.value;
@@ -231,6 +249,7 @@ const Announcements = (() => {
 
   return {
     captureFromDevice,
+    captureFromDeviceId,
     replayToDevice,
     exportCapture,
     getCaptures,

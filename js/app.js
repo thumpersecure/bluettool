@@ -1096,13 +1096,15 @@ document.addEventListener('DOMContentLoaded', () => {
     updateParallelDeviceCount();
   });
 
-  BluetoothScanner.setOnConnectionChange((info, connected) => {
+  BluetoothScanner.setOnConnectionChange((info, connected, context) => {
     renderDeviceList();
     updateParallelDeviceCount();
     const displayName = getDisplayName(info);
     if (connected) {
-      showAudioOverlay();
-      AudioPlayer.triggerOnConnect();
+      if (context?.source !== 'agent') {
+        showAudioOverlay();
+        AudioPlayer.triggerOnConnect();
+      }
       showToast(`Connected to ${displayName}`, 'success');
     } else {
       showToast(`Disconnected from ${displayName}`, 'info');
