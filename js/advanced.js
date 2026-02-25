@@ -13,6 +13,8 @@ const Advanced = (() => {
   let discoveryLog = [];
   let activeRunToken = 0;
   const MAX_LOG_ENTRIES = 1000;
+  const PARALLEL_READ_AGENT_LIMIT = 4;
+  const PARALLEL_READ_AGENT_MIN = 2;
 
   const AGENT_STATES = {
     IDLE: 'idle',
@@ -69,6 +71,76 @@ const Advanced = (() => {
     activeRunToken++;
     setStatus(AGENT_STATES.IDLE, 'Agent stopped by user');
     running = false;
+  }
+
+  function getParallelReadAgentCount(totalReads) {
+    const total = Number.isFinite(totalReads) ? Math.max(0, totalReads) : 0;
+    if (total === 0) return 0;
+    const hardwareHint = typeof navigator !== 'undefined' && Number.isFinite(navigator.hardwareConcurrency)
+      ? navigator.hardwareConcurrency
+      : PARALLEL_READ_AGENT_LIMIT;
+    const suggested = Math.max(
+      PARALLEL_READ_AGENT_MIN,
+      Math.min(PARALLEL_READ_AGENT_LIMIT, Math.floor(hardwareHint / 2) || PARALLEL_READ_AGENT_MIN)
+    );
+    return Math.min(total, suggested);
+  }
+
+  async function runParallelReadAgents(readQueue, emit, shouldStop, results) {
+    if (!Array.isArray(readQueue) || readQueue.length === 0) {
+      emit(AGENT_STATES.READING, 'No readable characteristics available for deep read pass');
+      return;
+    }
+
+    const readAgentCount = getParallelReadAgentCount(readQueue.length);
+    let nextIndex = 0;
+    let completedReads = 0;
+    let failedReads = 0;
+
+    emit(
+      AGENT_STATES.READING,
+      `Launching ${readAgentCount} parallel read agent${readAgentCount === 1 ? '' : 's'} for ${readQueue.length} characteristic reads...`,
+      { readAgents: readAgentCount, totalReads: readQueue.length }
+    );
+
+    const readAgents = Array.from({ length: readAgentCount }, (_, agentIndex) => (async () => {
+      while (true) {
+        if (shouldStop()) return;
+        const queueIndex = nextIndex++;
+        if (queueIndex >= readQueue.length) return;
+
+        const ch = readQueue[queueIndex];
+        try {
+          await BluetoothScanner.readCharacteristic(ch);
+          if (shouldStop()) return;
+          completedReads++;
+          results.readableValues++;
+          emit(AGENT_STATES.READING,
+            `[agent ${agentIndex + 1}] Read ${ch.name}: ${ch.value || '(empty)'}`,
+            {
+              char: ch.name,
+              value: ch.value,
+              readAgent: agentIndex + 1,
+              progress: `${completedReads + failedReads}/${readQueue.length}`
+            });
+        } catch (_) {
+          failedReads++;
+          // Some characteristics refuse reads — that's normal
+        }
+      }
+    })());
+
+    await Promise.all(readAgents);
+    if (shouldStop()) return;
+
+    emit(AGENT_STATES.READING,
+      `Read ${results.readableValues}/${readQueue.length} characteristic values using ${readAgentCount} parallel agents`,
+      {
+        readAgents: readAgentCount,
+        attemptedReads: readQueue.length,
+        successfulReads: results.readableValues,
+        failedReads
+      });
   }
 
   /**
@@ -162,25 +234,15 @@ const Advanced = (() => {
       emit(AGENT_STATES.READING, 'Reading all accessible characteristic values...');
 
       if (updatedInfo) {
+        const readQueue = [];
         for (const svc of updatedInfo.services) {
           for (const ch of svc.characteristics) {
-            if (shouldStop()) break;
             if (ch.properties.includes('read') && ch.characteristic) {
-              try {
-                await BluetoothScanner.readCharacteristic(ch);
-                if (shouldStop()) return results;
-                results.readableValues++;
-                emit(AGENT_STATES.READING,
-                  `Read ${ch.name}: ${ch.value || '(empty)'}`,
-                  { char: ch.name, value: ch.value });
-              } catch (_) {
-                // Some characteristics refuse reads — that's normal
-              }
+              readQueue.push(ch);
             }
           }
         }
-        emit(AGENT_STATES.READING,
-          `Read ${results.readableValues} characteristic values`);
+        await runParallelReadAgents(readQueue, emit, shouldStop, results);
       }
 
       if (shouldStop()) return results;
