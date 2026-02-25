@@ -1663,21 +1663,26 @@ body {
 }
 
 .empty-state .empty-cta {
-  margin-top: 16px;
-  padding: 10px 20px;
+  margin-top: 20px;
+  padding: 12px 24px;
   min-height: var(--touch-target);
   font-size: 14px;
-  border-radius: 10px;
-  background: var(--accent-cyan-alpha);
+  font-weight: 600;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--accent-cyan-alpha-15) 0%, var(--accent-cyan-alpha) 100%);
   color: var(--accent-cyan);
   border: 1px solid var(--accent-cyan-border);
   cursor: pointer;
-  transition: background var(--transition-fast), transform 0.1s;
+  transition: background var(--transition-fast), transform 0.1s, box-shadow 0.2s;
   -webkit-tap-highlight-color: transparent;
 }
 
+.empty-state .empty-cta:hover {
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.2);
+}
+
 .empty-state .empty-cta:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
 /* ===== Device Quick Actions ===== */
@@ -2055,6 +2060,10 @@ body {
   --text-secondary: #4a5078;
   --text-hint: #6c7299;
   --border-color: #d4d8e8;
+}
+
+[data-theme="light"] body {
+  background: linear-gradient(165deg, #f5f6fa 0%, #eef0f8 40%, #f5f6fa 100%);
 }
 
 [data-theme="light"] .indicator.offline { background: #c62828; }
