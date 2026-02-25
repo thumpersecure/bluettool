@@ -15,6 +15,12 @@ const BluetoothScanner = (() => {
     '00001300-0000-1000-8000-00805f9b34fb'  // Bluetooth Mesh Lighting service
   ];
 
+  const IDENTITY_CHAR_UUIDS = new Set([
+    '00002a00-0000-1000-8000-00805f9b34fb', // Device Name
+    '00002a29-0000-1000-8000-00805f9b34fb', // Manufacturer Name
+    '00002a24-0000-1000-8000-00805f9b34fb', // Model Number
+  ]);
+
   /** Check Web Bluetooth support */
   function checkSupport() {
     const results = [];
@@ -125,6 +131,7 @@ const BluetoothScanner = (() => {
         id: device.id,
         name: (device.name || '').trim() || 'Unknown Device',
         device: device,
+        server: null,
         discovered: new Date().toISOString(),
         connected: false,
         services: [],
@@ -143,10 +150,11 @@ const BluetoothScanner = (() => {
       device.addEventListener('gattserverdisconnected', () => {
         Logger.warn(`Device disconnected: ${info.name}`);
         info.connected = false;
-        connectedDevice = null;
-        connectedServer = null;
+        info.server = null;
+        if (connectedDevice?.id === info.id) connectedDevice = null;
+        if (connectedServer && connectedServer?.device?.id === info.id) connectedServer = null;
         updateStatus('offline', 'Disconnected');
-        if (onConnectionChange) onConnectionChange(info, false);
+        if (onConnectionChange) onConnectionChange(info, false, { source: 'device' });
       });
 
       if (onDeviceFound) onDeviceFound(info);
@@ -221,7 +229,7 @@ const BluetoothScanner = (() => {
   /**
    * Connect to a discovered device and enumerate its GATT services
    */
-  async function connect(deviceId) {
+  async function connect(deviceId, options = {}) {
     const info = devices.get(deviceId);
     if (!info) {
       Logger.error(`Unknown device ID: ${deviceId}`);
@@ -235,18 +243,22 @@ const BluetoothScanner = (() => {
       if (!info.device.gatt) {
         throw new Error('Device GATT server unavailable — try scanning again');
       }
+      const deepReadOnEnumerate = options.deepReadOnEnumerate !== false;
+      const ctx = { ...options, source: options.source || 'user' };
+
       const server = await info.device.gatt.connect();
-      connectedDevice = info;
+      info.server = server;
+      connectedDevice = info; // "active" device for UI features like Replay
       connectedServer = server;
       info.connected = true;
 
       Logger.success(`Connected to ${info.name}`);
       updateStatus('connected', `Connected: ${info.name}`);
 
-      if (onConnectionChange) onConnectionChange(info, true);
+      if (onConnectionChange) onConnectionChange(info, true, ctx);
 
       // Enumerate services
-      await enumerateServices(info, server);
+      await enumerateServices(info, server, { readValues: deepReadOnEnumerate });
 
       return info;
 
@@ -273,23 +285,25 @@ const BluetoothScanner = (() => {
       // GATT may already be disconnected
     }
     info.connected = false;
+    info.server = null;
     if (connectedDevice && connectedDevice.id === deviceId) {
       connectedDevice = null;
       connectedServer = null;
     }
     updateStatus('offline', 'Disconnected');
-    if (onConnectionChange) onConnectionChange(info, false);
+    if (onConnectionChange) onConnectionChange(info, false, { source: 'user' });
   }
 
   /**
    * Enumerate all GATT services and their characteristics
    */
-  async function enumerateServices(info, server) {
+  async function enumerateServices(info, server, options = {}) {
     Logger.info('Enumerating GATT services...');
     info.services = [];
     info.characteristics = [];
     info.lightTestPlan = null;
     info.deviceType = 'unknown';
+    const readValues = options.readValues !== false;
 
     try {
       const services = await server.getPrimaryServices();
@@ -322,7 +336,9 @@ const BluetoothScanner = (() => {
             };
 
             // Try to read the value
-            if (char.properties.read) {
+            const normalizedUuid = normalizeUuid(char.uuid);
+            const shouldReadValue = !!(char.properties.read && (readValues || IDENTITY_CHAR_UUIDS.has(normalizedUuid)));
+            if (shouldReadValue) {
               try {
                 const value = await char.readValue();
                 charInfo.value = dataViewToHex(value);
@@ -733,6 +749,10 @@ const BluetoothScanner = (() => {
     return Array.from(devices.values());
   }
 
+  function getDevice(deviceId) {
+    return devices.get(deviceId) || null;
+  }
+
   function getConnectedDevice() {
     return connectedDevice;
   }
@@ -741,12 +761,18 @@ const BluetoothScanner = (() => {
     return connectedServer;
   }
 
+  function getServer(deviceId) {
+    const info = devices.get(deviceId);
+    return info?.server || null;
+  }
+
   function clearDevices() {
     // Disconnect any connected device first
     for (const [id, info] of devices) {
       if (info.connected && info.device.gatt?.connected) {
         info.device.gatt.disconnect();
       }
+      info.server = null;
     }
     devices.clear();
     connectedDevice = null;
@@ -793,8 +819,10 @@ const BluetoothScanner = (() => {
     writeCharacteristic,
     subscribeNotifications,
     getDevices,
+    getDevice,
     getConnectedDevice,
     getConnectedServer,
+    getServer,
     clearDevices,
     exportCSV,
     setOnDeviceFound,
