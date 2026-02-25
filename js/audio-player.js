@@ -20,6 +20,8 @@ const AudioPlayer = (() => {
   let stopRequested = false;
   let activeNodes = [];
   let fileAudioEl = null;
+  let masterVolume = 0.5;
+  let pendingTimeouts = [];
 
   function getContext() {
     if (!audioCtx) {
@@ -31,12 +33,25 @@ const AudioPlayer = (() => {
     return audioCtx;
   }
 
+  function setVolume(vol) {
+    masterVolume = Math.max(0, Math.min(1, vol));
+    if (fileAudioEl) {
+      fileAudioEl.volume = masterVolume;
+    }
+  }
+
+  function getVolume() {
+    return masterVolume;
+  }
+
   function stopAll() {
     stopRequested = true;
     activeNodes.forEach(n => {
       try { n.stop(); } catch (_) { /* already stopped */ }
     });
     activeNodes = [];
+    pendingTimeouts.forEach(id => clearTimeout(id));
+    pendingTimeouts = [];
     if (fileAudioEl) {
       fileAudioEl.pause();
       fileAudioEl.currentTime = 0;
@@ -49,8 +64,9 @@ const AudioPlayer = (() => {
     return new Promise(resolve => {
       if (stopRequested) { resolve(); return; }
       const ctx = getContext();
+      const scaledVol = (volume || 0.3) * masterVolume;
       const gain = ctx.createGain();
-      gain.gain.value = volume || 0.3;
+      gain.gain.value = scaledVol;
       gain.connect(ctx.destination);
 
       const osc1 = ctx.createOscillator();
@@ -61,18 +77,18 @@ const AudioPlayer = (() => {
       const startTime = ctx.currentTime;
       const endTime = startTime + duration;
 
-      // Fade envelope to avoid clicks
       gain.gain.setValueAtTime(0, startTime);
-      gain.gain.linearRampToValueAtTime(volume || 0.3, startTime + 0.005);
-      gain.gain.setValueAtTime(volume || 0.3, endTime - 0.005);
+      gain.gain.linearRampToValueAtTime(scaledVol, startTime + 0.005);
+      gain.gain.setValueAtTime(scaledVol, endTime - 0.005);
       gain.gain.linearRampToValueAtTime(0, endTime);
 
       osc1.start(startTime);
       osc1.stop(endTime);
       activeNodes.push(osc1);
 
+      let osc2 = null;
       if (freq2 && freq2 !== freq1) {
-        const osc2 = ctx.createOscillator();
+        osc2 = ctx.createOscillator();
         osc2.frequency.value = freq2;
         osc2.type = 'sine';
         osc2.connect(gain);
@@ -81,17 +97,23 @@ const AudioPlayer = (() => {
         activeNodes.push(osc2);
       }
 
-      setTimeout(() => {
-        activeNodes = activeNodes.filter(n => n !== osc1);
+      const tid = setTimeout(() => {
+        activeNodes = activeNodes.filter(n => n !== osc1 && n !== osc2);
+        pendingTimeouts = pendingTimeouts.filter(t => t !== tid);
         resolve();
       }, duration * 1000 + 20);
+      pendingTimeouts.push(tid);
     });
   }
 
   function wait(ms) {
     return new Promise(resolve => {
       if (stopRequested) { resolve(); return; }
-      setTimeout(resolve, ms);
+      const tid = setTimeout(() => {
+        pendingTimeouts = pendingTimeouts.filter(t => t !== tid);
+        resolve();
+      }, ms);
+      pendingTimeouts.push(tid);
     });
   }
 
@@ -132,7 +154,7 @@ const AudioPlayer = (() => {
       if (!stopRequested) await playTone(1650, 1850, 1.0, 0.25);
       if (!stopRequested) await playTone(CED_FREQ, CED_FREQ, 0.5, 0.25);
 
-      Logger.success('DTMF sequence complete');
+      if (!stopRequested) Logger.success('DTMF sequence complete');
     } catch (err) {
       if (!stopRequested) Logger.error('Audio playback error: ' + err.message);
     } finally {
@@ -153,6 +175,7 @@ const AudioPlayer = (() => {
       fileAudioEl = new Audio('audio/dtmf-fax-tones.wav');
     }
 
+    fileAudioEl.volume = masterVolume;
     fileAudioEl.currentTime = 0;
     fileAudioEl.play().then(() => {
       Logger.success('Audio file playback started');
@@ -200,6 +223,8 @@ const AudioPlayer = (() => {
     getAudioBlob,
     triggerOnConnect,
     getIsPlaying,
+    setVolume,
+    getVolume,
     DTMF_FREQS
   };
 })();

@@ -101,6 +101,7 @@ const Advanced = (() => {
       } catch (err) {
         if (err.name === 'NotFoundError') {
           setStatus(AGENT_STATES.IDLE, 'Scan cancelled - no device selected');
+          running = false;
           return results;
         }
         throw err;
