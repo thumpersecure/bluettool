@@ -327,6 +327,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const nameValue = document.getElementById('filter-name-value').value.trim();
     const svcFilterEnabled = document.getElementById('filter-services').checked;
     const svcValue = document.getElementById('filter-service-value').value.trim();
+    const scanDurationHint = document.getElementById('scan-duration-hint');
+    const scanDuration = scanDurationHint ? parseInt(scanDurationHint.value, 10) : 0;
 
     if (nameFilterEnabled && nameValue) {
       options.namePrefix = nameValue;
@@ -337,6 +339,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       options.services = [svcValue];
+    }
+    if (scanDuration > 0) {
+      options.scanDuration = scanDuration;
     }
 
     btnScan.disabled = true;
@@ -358,13 +363,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   btnScanAll?.addEventListener('click', async () => {
+    const scanDurationHint = document.getElementById('scan-duration-hint');
+    const scanDuration = scanDurationHint ? parseInt(scanDurationHint.value, 10) : 0;
+    const options = scanDuration > 0 ? { scanDuration } : {};
     btnScanAll.disabled = true;
     btnScanAll.classList.add('loading');
     const scanAllLabel = btnScanAll.textContent;
     btnScanAll.dataset.originalText = scanAllLabel;
     btnScanAll.textContent = 'Scanning...';
     try {
-      await BluetoothScanner.scanAll();
+      await BluetoothScanner.scanAll(options);
       renderDeviceList();
       showToast('Device found', 'success');
     } catch (err) {

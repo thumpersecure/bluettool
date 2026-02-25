@@ -197,17 +197,26 @@ const BluetoothScanner = (() => {
 
   /**
    * Scan accepting all devices (no filter)
+   * @param {Object} options - Optional scan options (e.g. scanDuration)
    */
-  async function scanAll() {
-    return scan({ acceptAll: true });
+  async function scanAll(options = {}) {
+    return scan({ acceptAll: true, ...options });
   }
 
   function buildScanFilters(options) {
+    const base = (params) => {
+      const result = { ...params };
+      if (options.scanDuration && options.scanDuration > 0) {
+        result.scanDuration = options.scanDuration;
+      }
+      return result;
+    };
+
     if (options.acceptAll) {
-      return {
+      return base({
         acceptAllDevices: true,
         optionalServices: getCommonServiceUUIDs()
-      };
+      });
     }
 
     const filters = [];
@@ -221,16 +230,16 @@ const BluetoothScanner = (() => {
     }
 
     if (filters.length === 0) {
-      return {
+      return base({
         acceptAllDevices: true,
         optionalServices: getCommonServiceUUIDs()
-      };
+      });
     }
 
-    return {
+    return base({
       filters,
       optionalServices: getCommonServiceUUIDs()
-    };
+    });
   }
 
   function getCommonServiceUUIDs() {
