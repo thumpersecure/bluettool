@@ -33,6 +33,7 @@ const requiredFiles = [
   'manifest.json',
   'css/style.css',
   'js/app.js',
+  'js/delight.js',
   'js/logger.js',
   'js/browser-compat.js',
   'js/call-history.js',
@@ -43,6 +44,7 @@ const requiredFiles = [
   'js/vulnerability.js',
   'js/advanced.js',
   'js/sharing.js',
+  'js/voice-commands.js',
   'js/macros.js',
   'audio/dtmf-fax-tones.wav',
   'README.md',
@@ -121,6 +123,13 @@ assert(html.includes('id="dtmf-speed"'), 'Has DTMF speed selector');
 assert(html.includes('id="dtmf-custom-input"'), 'Has custom DTMF input');
 assert(html.includes('id="btn-play-custom-dtmf"'), 'Has custom DTMF play button');
 
+// Voice Commands
+assert(html.includes('Voice Commands'), 'Has Voice Commands section');
+assert(html.includes('id="btn-voice-mic"'), 'Has voice mic button');
+assert(html.includes('id="voice-status"'), 'Has voice status');
+assert(html.includes('id="voice-unsupported"'), 'Has voice unsupported message');
+assert(html.includes('voice-commands.js'), 'Loads voice-commands.js');
+
 // Device detail panel
 assert(html.includes('id="device-detail"'), 'Has device detail panel');
 assert(html.includes('id="btn-back-devices"'), 'Has back button in detail');
@@ -145,6 +154,7 @@ assert(html.includes('personal testing'), 'Disclaimer mentions personal testing'
 // Script load order (browser-compat must load before bluetooth-scanner for compat matrix)
 const scriptOrder = [
   'js/logger.js',
+  'js/delight.js',
   'js/browser-compat.js',
   'js/call-history.js',
   'js/macros.js',
@@ -155,6 +165,7 @@ const scriptOrder = [
   'js/vulnerability.js',
   'js/advanced.js',
   'js/sharing.js',
+  'js/voice-commands.js',
   'js/app.js'
 ];
 let lastIdx = -1;
@@ -173,6 +184,7 @@ section('JavaScript Module Quality');
 
 const jsFiles = [
   'js/app.js',
+  'js/delight.js',
   'js/logger.js',
   'js/bluetooth-scanner.js',
   'js/announcements.js',
@@ -180,6 +192,7 @@ const jsFiles = [
   'js/vulnerability.js',
   'js/advanced.js',
   'js/sharing.js',
+  'js/voice-commands.js',
   'js/macros.js',
 ];
 
@@ -206,6 +219,7 @@ assert(swContent.includes('CACHE_NAME'), 'Service worker has cache name');
 assert(swContent.includes('install'), 'Service worker has install handler');
 assert(swContent.includes('fetch'), 'Service worker has fetch handler');
 assert(swContent.includes('vulnerability.js'), 'Service worker caches vulnerability.js');
+assert(swContent.includes('voice-commands.js'), 'Service worker caches voice-commands.js');
 
 // --- App.js Features ---
 section('App.js Feature Verification');
@@ -315,6 +329,15 @@ assert(appJs.includes('Enter valid hex color'), 'Validates color input format');
 assert(appJs.includes('No connected smart lights'), 'Shows error when no lights for flash/off');
 assert(appJs.includes('No connected RGB lights'), 'Shows error when no lights for color');
 
+// Voice Commands in app.js
+assert(appJs.includes('VoiceCommands'), 'References VoiceCommands');
+assert(appJs.includes('btn-voice-mic'), 'Wires voice mic button');
+assert(appJs.includes('runAction'), 'Has runAction for voice command execution');
+assert(appJs.includes('flash_lights'), 'Handles flash_lights voice action');
+assert(appJs.includes('silence_all'), 'Handles silence_all voice action');
+assert(appJs.includes('setOnResult'), 'Registers voice result callback');
+assert(appJs.includes('setOnStatus'), 'Registers voice status callback');
+
 // --- Replay Tab ---
 section('Replay Tab Features');
 
@@ -423,6 +446,24 @@ assert(shareJs.includes('shareHearts'), 'Has shareHearts');
 assert(shareJs.includes('navigator.share'), 'Uses Web Share API');
 assert(shareJs.includes('AbortError'), 'Handles cancellation');
 
+// --- Voice Commands Module Tests ---
+section('Voice Commands Module');
+
+const voiceJs = fs.readFileSync(path.join(ROOT, 'js/voice-commands.js'), 'utf8');
+
+assert(voiceJs.includes('SpeechRecognition'), 'Uses SpeechRecognition API');
+assert(voiceJs.includes('webkitSpeechRecognition'), 'Uses webkit prefix fallback');
+assert(voiceJs.includes('isSupported'), 'Has isSupported method');
+assert(voiceJs.includes('startListening'), 'Has startListening method');
+assert(voiceJs.includes('stopListening'), 'Has stopListening method');
+assert(voiceJs.includes('parseCommand'), 'Has parseCommand for transcript parsing');
+assert(voiceJs.includes('setOnResult'), 'Has setOnResult callback');
+assert(voiceJs.includes('setOnStatus'), 'Has setOnStatus callback');
+assert(voiceJs.includes('flash_lights'), 'Maps flash lights command');
+assert(voiceJs.includes('silence_all'), 'Maps silence command');
+assert(voiceJs.includes('parseColorFromTranscript'), 'Parses color from transcript');
+assert(voiceJs.includes('getAvailableCommands'), 'Exposes getAvailableCommands');
+
 // --- Logger Tests ---
 section('Logger Module');
 
@@ -514,6 +555,10 @@ assert(css.includes('.per-device-result'), 'Per-device result styles');
 assert(css.includes('.per-device-risk'), 'Per-device risk styles');
 assert(css.includes('.counter-running'), 'Running counter styles');
 assert(css.includes('.counter-completed'), 'Completed counter styles');
+assert(css.includes('.btn-voice-mic'), 'Voice mic button styles');
+assert(css.includes('.voice-status'), 'Voice status styles');
+assert(css.includes('.voice-unsupported'), 'Voice unsupported message styles');
+assert(css.includes('.voice-last-result'), 'Voice last result styles');
 assert(!css.includes('rickroll'), 'No rickroll in CSS');
 
 // --- Audio File Tests ---
@@ -554,6 +599,7 @@ assert(readme.includes('AirDrop'), 'AirDrop documented');
 assert(readme.includes('Agentic'), 'Agentic documented');
 assert(readme.includes('Silence'), 'Silence documented');
 assert(readme.includes('Tools') && readme.includes('Replay'), 'Tools and Replay tabs documented');
+assert(readme.includes('Macros') || readme.includes('macros'), 'Macros feature documented');
 assert(!readme.includes('rickroll'), 'No rickroll in README');
 
 // --- Summary ---

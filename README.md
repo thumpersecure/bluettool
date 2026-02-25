@@ -41,6 +41,7 @@
   - [📱 Devices](#-devices)
   - [📞 Call History](#-call-history)
   - [🛠️ Tools Tab](#️-tools-tab)
+  - [⚡ Automation Macros](#-automation-macros-tools)
   - [📼 Replay Tab](#-replay-tab)
   - [🔊 Audio Test Tools](#-audio-test-tools)
   - [📤 Share via AirDrop](#-share-via-airdrop)
@@ -155,8 +156,35 @@ The **Tools** tab groups audio, lights, silence, and sharing controls:
 |---------|-------------|
 | 🔊 **Sound** | DTMF/fax tones, play file, stop audio — see [Audio Test Tools](#-audio-test-tools) |
 | 💡 **Lights** | Flash, turn off, or set color on connected smart lights (Govee, etc.) |
+| 🎤 **Voice Commands** | Hands-free control via Web Speech API — see [Voice Commands](#-voice-commands-tools) |
+| ⚡ **Macros** | Chain actions into one-tap sequences — see [Automation Macros](#-automation-macros-tools) |
 | 🔇 **Silence** | Stop all audio and disconnect BLE devices (silence Bluetooth speakers) |
 | 📤 **Share** | AirDrop/share via iOS share sheet — see [Share via AirDrop](#-share-via-airdrop) |
+
+### 🎤 Voice Commands (Tools)
+
+| Capability | Description |
+|------------|-------------|
+| 🎤 **Tap to Speak** | Tap the mic button and speak — no typing required |
+| 💡 **Flash lights** | Say "Flash lights" to flash all connected smart lights |
+| 🔴 **Turn off** | Say "Turn off lights" or "Lights off" |
+| 🔇 **Silence** | Say "Silence" to stop audio and disconnect all BLE devices |
+| ⏹️ **Stop** | Say "Stop" to stop audio playback only |
+| 🔍 **Scan** | Say "Scan" to start BLE device discovery |
+| 🎨 **Set color** | Say "Set color red" (or green, blue, etc.) to set light color |
+
+Requires Web Speech API (Chrome, Safari iOS 14.5+). Graceful fallback when unsupported.
+
+### ⚡ Automation Macros (Tools)
+
+| Capability | Description |
+|------------|-------------|
+| 📋 **Step types** | `delay` (wait ms), `light_flash`, `light_off`, `light_color`, `replay` (capture), `connect_device` |
+| ▶️ **Run** | Execute a macro with one tap — runs steps in sequence across connected devices |
+| ➕ **Add Macro** | Create a preset: delay → flash → delay → off (or customize steps) |
+| 🗑️ **Delete** | Remove macros with confirmation |
+
+Connect smart lights in the Devices tab first. Macros support `deviceId: 'all'` for parallel multi-device light control (flash all, set color on all, etc.).
 
 ### 📼 Replay Tab
 
@@ -356,6 +384,7 @@ bluettool/
 │   ├── vulnerability.js    # GATT security assessment
 │   ├── advanced.js        # Agentic auto-discovery engine
 │   ├── sharing.js         # AirDrop / Web Share module
+│   ├── voice-commands.js  # Voice control via Web Speech API
 │   └── app.js             # Main controller wiring UI to modules
 ├── audio/
 │   └── dtmf-fax-tones.wav  # Pre-generated DTMF/fax tones
