@@ -92,6 +92,7 @@ const BluetoothScanner = (() => {
     }
 
     renderCompatibility(results);
+    renderCompatMatrix();
     return results;
   }
 
@@ -106,6 +107,29 @@ const BluetoothScanner = (() => {
         <span class="${cls}">${icon} ${r.detail}</span>
       </div>`;
     }).join('');
+  }
+
+  function renderCompatMatrix() {
+    const container = document.getElementById('compat-matrix');
+    if (!container || typeof BrowserCompat === 'undefined') return;
+
+    const matrix = BrowserCompat.getFeatureMatrix();
+    const browserName = BrowserCompat.getBrowserName();
+
+    container.innerHTML = `
+      <div class="compat-matrix-header">What works in ${browserName}</div>
+      <div class="compat-matrix-grid">
+        <div class="compat-matrix-item ${matrix.ble.supported ? 'compat-ok' : 'compat-fail'}">
+          <span class="compat-matrix-label">BLE (Web Bluetooth)</span>
+          <span class="compat-matrix-detail">${matrix.ble.supported ? '\u2713 Works' : '\u2717 Not available'}</span>
+        </div>
+        <div class="compat-matrix-item ${matrix.classicBt.supported ? 'compat-ok' : 'compat-fail'}">
+          <span class="compat-matrix-label">Classic BT (Web Serial)</span>
+          <span class="compat-matrix-detail">${matrix.classicBt.supported ? '\u2713 Works' : '\u2717 Chrome 117+ only'}</span>
+        </div>
+      </div>
+      <p class="compat-matrix-hint">Bluefy: BLE only. Chrome 117+: BLE + Classic BT.</p>
+    `;
   }
 
   /**
@@ -237,7 +261,7 @@ const BluetoothScanner = (() => {
     }
 
     Logger.info(`Connecting to ${info.name}...`);
-    updateStatus('scanning', 'Connecting...');
+    updateStatus('connecting', 'Connecting...');
 
     try {
       if (!info.device.gatt) {
@@ -790,8 +814,8 @@ const BluetoothScanner = (() => {
         info.id,
         info.connected ? 'Yes' : 'No',
         info.discovered,
-        info.services.map(s => s.name).join('; '),
-        info.characteristics.map(c => `${c.name}=${c.value || 'N/A'}`).join('; ')
+        (info.services || []).map(s => s.name).join('; '),
+        (info.characteristics || []).map(c => `${c.name}=${c.value || 'N/A'}`).join('; ')
       ]);
     }
 
