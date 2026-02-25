@@ -234,6 +234,32 @@
         </div>
       </div>
 
+      <div class="card">
+        <h2>Parallel Multi-Device Discovery</h2>
+        <p class="hint">Analyze all discovered devices simultaneously. Scan for devices first, then launch parallel agents that connect, enumerate, and assess each device concurrently with batched characteristic reads.</p>
+        <div id="parallel-device-count" class="parallel-device-count">0 devices available</div>
+        <div class="agent-controls">
+          <button id="btn-agent-parallel" class="btn btn-primary btn-large">
+            Run Parallel Discovery
+          </button>
+          <button id="btn-agent-stop-all" class="btn btn-danger" disabled>
+            Stop All Agents
+          </button>
+        </div>
+      </div>
+
+      <div class="card" id="parallel-status-card" style="display:none;">
+        <div class="parallel-header">
+          <h2>Parallel Agent Pool</h2>
+          <div id="parallel-progress" class="parallel-progress">
+            <span id="parallel-running" class="parallel-counter counter-running">0 running</span>
+            <span id="parallel-completed" class="parallel-counter counter-completed">0 done</span>
+            <span id="parallel-total" class="parallel-counter counter-total">0 total</span>
+          </div>
+        </div>
+        <div id="agent-pool-list" class="agent-pool-list"></div>
+      </div>
+
       <div class="card" id="agent-status-card" style="display:none;">
         <h2>Agent Status</h2>
         <div id="agent-state-badge" class="agent-badge">idle</div>
@@ -243,6 +269,12 @@
       <div class="card" id="agent-results-card" style="display:none;">
         <h2>Discovery Results</h2>
         <div id="agent-results"></div>
+      </div>
+
+      <div class="card" id="aggregate-results-card" style="display:none;">
+        <h2>Aggregate Results</h2>
+        <div id="aggregate-stats" class="aggregate-stats"></div>
+        <div id="aggregate-results"></div>
       </div>
 
       <div class="card" id="vuln-report-card" style="display:none;">

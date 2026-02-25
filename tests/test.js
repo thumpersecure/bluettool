@@ -86,6 +86,15 @@ assert(html.includes('id="btn-share-link"'), 'Has share link button');
 assert(html.includes('id="btn-agent-full"'), 'Has full agent button');
 assert(html.includes('id="btn-agent-quick"'), 'Has quick agent button');
 assert(html.includes('id="btn-agent-stop"'), 'Has stop agent button');
+assert(html.includes('id="btn-agent-parallel"'), 'Has parallel discovery button');
+assert(html.includes('id="btn-agent-stop-all"'), 'Has stop all agents button');
+assert(html.includes('id="parallel-status-card"'), 'Has parallel status card');
+assert(html.includes('id="agent-pool-list"'), 'Has agent pool list');
+assert(html.includes('id="parallel-device-count"'), 'Has parallel device count');
+assert(html.includes('id="aggregate-results-card"'), 'Has aggregate results card');
+assert(html.includes('id="parallel-running"'), 'Has parallel running counter');
+assert(html.includes('id="parallel-completed"'), 'Has parallel completed counter');
+assert(html.includes('Parallel Multi-Device'), 'Has parallel discovery section title');
 
 // New v2 elements
 assert(html.includes('id="toast-container"'), 'Has toast container');
@@ -241,6 +250,20 @@ assert(appJs.includes('agentFeed.innerHTML = \'\''), 'Stop button clears agent f
 assert(appJs.includes('agentResultsCard.style.display = \'none\''), 'Stop button hides agent results');
 assert(appJs.includes('agentBadge.textContent = \'idle\''), 'Stop button resets agent badge');
 
+// Parallel agent UI wiring
+assert(appJs.includes('btn-agent-parallel'), 'Wires parallel discovery button');
+assert(appJs.includes('btn-agent-stop-all'), 'Wires stop all agents button');
+assert(appJs.includes('renderAgentPoolList'), 'Has agent pool list renderer');
+assert(appJs.includes('renderAggregateResults'), 'Has aggregate results renderer');
+assert(appJs.includes('updateParallelDeviceCount'), 'Updates parallel device count');
+assert(appJs.includes('updateAgentButtons'), 'Updates agent button states');
+assert(appJs.includes('runParallelDiscovery'), 'Calls parallel discovery');
+assert(appJs.includes('setOnAggregate'), 'Registers aggregate callback');
+assert(appJs.includes('per-device-result'), 'Renders per-device results');
+assert(appJs.includes('aggregate-stat'), 'Renders aggregate stats');
+assert(appJs.includes('getAgentCount'), 'Uses agent count for progress display');
+assert(appJs.includes('clearAgents'), 'Clears agents before parallel run');
+
 // --- Audio Player Tests ---
 section('Audio Player Module');
 
@@ -298,6 +321,26 @@ assert(advJs.includes('activeRunToken'), 'Tracks active run token for stop safet
 assert(advJs.includes('runParallelReadAgents'), 'Uses parallel read agent workers');
 assert(advJs.includes('PARALLEL_READ_AGENT_LIMIT'), 'Defines read agent concurrency limit');
 assert(advJs.includes('Promise.all(readAgents)'), 'Runs read agents in parallel');
+
+// Parallel multi-agent features
+assert(advJs.includes('runParallelDiscovery'), 'Has parallel discovery function');
+assert(advJs.includes('MAX_CONCURRENT_AGENTS'), 'Defines max concurrent agents limit');
+assert(advJs.includes('CHAR_READ_BATCH_SIZE'), 'Defines characteristic read batch size');
+assert(advJs.includes('createAgent'), 'Has agent factory function');
+assert(advJs.includes('agents'), 'Uses agent pool map');
+assert(advJs.includes('getAgents'), 'Exposes agent list');
+assert(advJs.includes('getAgentCount'), 'Exposes agent count helper');
+assert(advJs.includes('stopAgent'), 'Can stop individual agents');
+assert(advJs.includes('clearAgents'), 'Can clear all agents');
+assert(advJs.includes('setOnAggregate'), 'Has aggregate status callback');
+assert(advJs.includes('parallelReadCharacteristics'), 'Has parallel characteristic read function');
+assert(advJs.includes('Promise.allSettled'), 'Uses Promise.allSettled for parallel operations');
+assert(advJs.includes('buildAggregateResults'), 'Builds aggregate results from parallel runs');
+assert(advJs.includes('QUEUED'), 'Has QUEUED agent state for pool scheduling');
+assert(advJs.includes('globalStopRequested'), 'Has global stop flag for multi-agent control');
+assert(advJs.includes('runAgentDiscovery'), 'Has per-agent discovery pipeline');
+assert(advJs.includes('agentId'), 'Tracks agent ID in status entries');
+assert(advJs.includes('concurrencyLimit'), 'Implements concurrency limiting');
 
 // --- Sharing Module Tests ---
 section('Sharing Module');
@@ -376,6 +419,21 @@ assert(css.includes('.vuln-risk-medium'), 'Medium risk styling');
 assert(css.includes('.vuln-risk-low'), 'Low risk styling');
 assert(css.includes('.vuln-rec'), 'Vulnerability recommendation styles');
 assert(css.includes('.agent-vuln_assess'), 'Agent vuln_assess state styling');
+assert(css.includes('.agent-queued'), 'Agent queued state styling');
+assert(css.includes('.parallel-device-count'), 'Parallel device count styles');
+assert(css.includes('.parallel-header'), 'Parallel header styles');
+assert(css.includes('.parallel-progress'), 'Parallel progress styles');
+assert(css.includes('.parallel-counter'), 'Parallel counter styles');
+assert(css.includes('.agent-pool-list'), 'Agent pool list styles');
+assert(css.includes('.agent-pool-item'), 'Agent pool item styles');
+assert(css.includes('.agent-pool-header'), 'Agent pool header styles');
+assert(css.includes('.agent-badge-sm'), 'Small agent badge styles');
+assert(css.includes('.aggregate-stats'), 'Aggregate stats styles');
+assert(css.includes('.aggregate-stat'), 'Aggregate stat chip styles');
+assert(css.includes('.per-device-result'), 'Per-device result styles');
+assert(css.includes('.per-device-risk'), 'Per-device risk styles');
+assert(css.includes('.counter-running'), 'Running counter styles');
+assert(css.includes('.counter-completed'), 'Completed counter styles');
 assert(!css.includes('rickroll'), 'No rickroll in CSS');
 
 // --- Audio File Tests ---
