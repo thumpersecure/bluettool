@@ -316,6 +316,33 @@
       </div>
 
       <div class="card">
+        <h2>🎤 Voice Commands</h2>
+        <p class="hint">Tap the mic and speak. Hands-free control for lights, silence, and more.</p>
+        <div class="section-desc">
+          <strong>Try saying:</strong>
+          <ul>
+            <li><strong>Flash lights</strong> — Flash all connected smart lights</li>
+            <li><strong>Turn off lights</strong> — Turn off all connected lights</li>
+            <li><strong>Silence</strong> — Stop audio and disconnect all BLE devices</li>
+            <li><strong>Stop</strong> — Stop audio playback only</li>
+            <li><strong>Scan</strong> — Start BLE device scan</li>
+            <li><strong>Set color red</strong> — Set lights to a color (red, green, blue, etc.)</li>
+          </ul>
+        </div>
+        <div id="voice-unsupported" class="voice-unsupported hidden">
+          <span class="voice-unsupported-msg">Voice commands require Web Speech API. Use Chrome or Safari (iOS 14.5+).</span>
+        </div>
+        <div class="voice-controls">
+          <button id="btn-voice-mic" class="btn btn-primary btn-voice-mic" aria-label="Start voice command" disabled>
+            <span class="voice-mic-icon">🎤</span>
+            <span class="voice-mic-label">Tap to Speak</span>
+          </button>
+          <span id="voice-status" class="voice-status"></span>
+        </div>
+        <div id="voice-last-result" class="voice-last-result hidden"></div>
+      </div>
+
+      <div class="card">
         <h2>⚡ Macros</h2>
         <p class="hint">Chain actions into one-tap sequences: delays, light commands, replay, connect.</p>
         <div class="section-desc">
@@ -323,7 +350,7 @@
         </div>
         <div id="macros-list" class="macros-list"></div>
         <div class="macros-actions">
-          <button id="btn-add-macro" class="btn btn-primary">Add Macro</button>
+          <button id="btn-add-macro" class="btn btn-primary" aria-label="Add new macro">Add Macro</button>
         </div>
         <div id="macro-form" class="macro-form hidden">
           <input type="text" id="macro-name-input" class="input-field" placeholder="Macro name (e.g. Quick Light Test)">
@@ -630,6 +657,7 @@
   </div>
 
   <script src="js/logger.js"></script>
+  <script src="js/delight.js"></script>
   <script src="js/browser-compat.js"></script>
   <script src="js/call-history.js"></script>
   <script src="js/macros.js"></script>

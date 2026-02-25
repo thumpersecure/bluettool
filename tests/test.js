@@ -554,6 +554,7 @@ assert(readme.includes('AirDrop'), 'AirDrop documented');
 assert(readme.includes('Agentic'), 'Agentic documented');
 assert(readme.includes('Silence'), 'Silence documented');
 assert(readme.includes('Tools') && readme.includes('Replay'), 'Tools and Replay tabs documented');
+assert(readme.includes('Macros') || readme.includes('macros'), 'Macros feature documented');
 assert(!readme.includes('rickroll'), 'No rickroll in README');
 
 // --- Summary ---

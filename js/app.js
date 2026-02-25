@@ -12,11 +12,11 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // --- Shared Utilities ---
+  const _escapeDiv = document.createElement('div');
   function escapeHtml(str) {
     if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = String(str);
-    return div.innerHTML;
+    _escapeDiv.textContent = String(str);
+    return _escapeDiv.innerHTML;
   }
 
   function isPrintable(str) {
@@ -129,13 +129,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Toast Notifications ---
   function showToast(message, type) {
-    const container = document.getElementById('toast-container');
+    const container = $('toast-container');
     if (!container) return;
     const toast = document.createElement('div');
     toast.className = 'toast toast-' + (type || 'info');
     toast.textContent = message;
     container.appendChild(toast);
-    // Trigger animation
+    if (typeof Delight !== 'undefined') {
+      if (type === 'success') Delight.successBuzz();
+      else if (type === 'error') Delight.errorBuzz();
+    }
     requestAnimationFrame(() => toast.classList.add('toast-show'));
     setTimeout(() => {
       toast.classList.remove('toast-show');
@@ -147,11 +150,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Confirm Dialog ---
   function showConfirm(title, message) {
     return new Promise(resolve => {
-      const dialog = document.getElementById('confirm-dialog');
-      const titleEl = document.getElementById('confirm-title');
-      const messageEl = document.getElementById('confirm-message');
-      const okBtn = document.getElementById('confirm-ok');
-      const cancelBtn = document.getElementById('confirm-cancel');
+      const dialog = $('confirm-dialog');
+      const titleEl = $('confirm-title');
+      const messageEl = $('confirm-message');
+      const okBtn = $('confirm-ok');
+      const cancelBtn = $('confirm-cancel');
       if (!dialog || !titleEl || !messageEl || !okBtn || !cancelBtn) {
         resolve(false);
         return;
@@ -297,41 +300,41 @@ document.addEventListener('DOMContentLoaded', () => {
     document.documentElement.setAttribute('data-theme', settings.themeDark ? 'dark' : 'light');
     const themeColor = document.querySelector('meta[name="theme-color"]');
     if (themeColor) themeColor.content = settings.themeDark ? '#0a0e27' : '#f5f6fa';
-    const themeCheck = document.getElementById('setting-theme-dark');
+    const themeCheck = $('setting-theme-dark');
     if (themeCheck) themeCheck.checked = settings.themeDark;
-    const persistVol = document.getElementById('setting-persist-volume');
+    const persistVol = $('setting-persist-volume');
     if (persistVol) persistVol.checked = settings.persistVolume;
     if (settings.persistVolume && typeof settings.volume === 'number') {
-      const volSlider = document.getElementById('volume-slider');
-      const volVal = document.getElementById('volume-value');
+      const volSlider = $('volume-slider');
+      const volVal = $('volume-value');
       if (volSlider && volVal) {
         volSlider.value = Math.min(100, Math.max(0, settings.volume));
         volVal.textContent = volSlider.value + '%';
         if (typeof AudioPlayer !== 'undefined') AudioPlayer.setVolume(volSlider.value / 100);
       }
     }
-    const scanTimeout = document.getElementById('setting-scan-timeout');
+    const scanTimeout = $('setting-scan-timeout');
     if (scanTimeout) scanTimeout.value = String(settings.scanTimeout || 0);
-    const defaultSort = document.getElementById('setting-default-sort');
+    const defaultSort = $('setting-default-sort');
     if (defaultSort) defaultSort.value = settings.defaultSort || 'date-desc';
-    const defaultFilter = document.getElementById('setting-default-filter');
+    const defaultFilter = $('setting-default-filter');
     if (defaultFilter) defaultFilter.value = settings.defaultFilter || 'all';
-    const deviceSort = document.getElementById('device-sort');
+    const deviceSort = $('device-sort');
     if (deviceSort) deviceSort.value = settings.defaultSort || 'date-desc';
-    const deviceFilter = document.getElementById('device-filter');
+    const deviceFilter = $('device-filter');
     if (deviceFilter) deviceFilter.value = settings.defaultFilter || 'all';
-    const scanDurationHint = document.getElementById('scan-duration-hint');
+    const scanDurationHint = $('scan-duration-hint');
     if (scanDurationHint) scanDurationHint.value = String(settings.scanTimeout || 0);
   }
 
   function getCurrentSettings() {
     const s = loadSettings();
-    const themeCheck = document.getElementById('setting-theme-dark');
-    const persistVol = document.getElementById('setting-persist-volume');
-    const volSlider = document.getElementById('volume-slider');
-    const scanTimeout = document.getElementById('setting-scan-timeout');
-    const defaultSort = document.getElementById('setting-default-sort');
-    const defaultFilter = document.getElementById('setting-default-filter');
+    const themeCheck = $('setting-theme-dark');
+    const persistVol = $('setting-persist-volume');
+    const volSlider = $('volume-slider');
+    const scanTimeout = $('setting-scan-timeout');
+    const defaultSort = $('setting-default-sort');
+    const defaultFilter = $('setting-default-filter');
     return {
       ...s,
       themeDark: themeCheck ? themeCheck.checked : s.themeDark,
@@ -388,6 +391,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Device list: event delegation (single listener, no re-binding on re-render)
   $('device-list')?.addEventListener('click', (e) => {
+    const pinBtn = e.target.closest('.btn-pin');
+    if (pinBtn) {
+      e.stopPropagation();
+      toggleFavorite(pinBtn.dataset.deviceId);
+      renderDeviceList();
+      return;
+    }
+    const resetFilterBtn = e.target.closest('#empty-cta-reset-filter');
+    if (resetFilterBtn) {
+      e.stopPropagation();
+      const filterEl = $('device-filter');
+      if (filterEl) { filterEl.value = 'all'; renderDeviceList(); }
+      return;
+    }
     const reconnectBtn = e.target.closest('.btn-reconnect');
     if (reconnectBtn) {
       e.stopPropagation();
@@ -628,13 +645,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <p class="empty-hint">Try "All devices" in the filter dropdown, or scan for more devices.</p>
         <button type="button" class="empty-cta" id="empty-cta-reset-filter" aria-label="Show all devices">Show All Devices</button>
       </div>`;
-      const resetBtn = list.querySelector('#empty-cta-reset-filter');
-      if (resetBtn) {
-        resetBtn.addEventListener('click', () => {
-          const filterEl = $('device-filter');
-          if (filterEl) { filterEl.value = 'all'; renderDeviceList(); }
-        });
-      }
       return;
     }
 
@@ -647,7 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const pinned = isFavorite(dev.id);
       const hasNotes = !!getDeviceNotes(dev.id);
       return `
-      <div class="device-item" data-device-id="${escapeHtml(dev.id)}">
+      <div class="device-item${dev.connected ? ' connected-glow' : ''}" data-device-id="${escapeHtml(dev.id)}">
         <div class="device-item-header">
           <button class="btn btn-ghost btn-pin" data-device-id="${escapeHtml(dev.id)}" title="${pinned ? 'Unpin' : 'Pin to top'}" aria-label="${pinned ? 'Unpin' : 'Pin to top'}">${pinned ? '&#128204;' : '&#128205;'}</button>
           <span class="device-name">${escapeHtml(displayName)}</span>
@@ -730,9 +740,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const dev = devices.find(d => d.id === deviceId);
     if (!dev) return;
 
-    const panel = document.getElementById('device-detail');
-    const nameEl = document.getElementById('detail-device-name');
-    const content = document.getElementById('detail-content');
+    const panel = $('device-detail');
+    const nameEl = $('detail-device-name');
+    const content = $('detail-content');
+    panel.dataset.deviceId = deviceId;
 
     const displayName = getDisplayName(dev);
     const deviceTypeLabel = getDeviceTypeLabel(dev);
@@ -946,16 +957,23 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           await Announcements.captureFromDevice();
           captureBtn.textContent = 'Captured!';
+          captureBtn.classList.add('btn-success-state');
+          if (typeof Delight !== 'undefined') {
+            Delight.maybeFirstCaptureConfetti();
+          }
           showToast('Profile captured', 'success');
           renderCaptures();
           setTimeout(() => {
+            captureBtn.classList.remove('btn-success-state');
             captureBtn.textContent = 'Capture Profile Snapshot';
             captureBtn.disabled = false;
           }, 2000);
         } catch (_) {
           captureBtn.textContent = 'Capture Failed';
+          captureBtn.classList.add('btn-error-state');
           captureBtn.disabled = false;
           showToast('Capture failed', 'error');
+          setTimeout(() => captureBtn.classList.remove('btn-error-state'), 500);
         }
       });
     }
@@ -1110,13 +1128,6 @@ document.addEventListener('DOMContentLoaded', () => {
           <button class="btn btn-secondary btn-small btn-export-capture" data-capture-id="${cap.id}">Export JSON</button>
         </div>
       `).join('');
-
-      capturedList.querySelectorAll('.btn-export-capture').forEach(btn => {
-        btn.addEventListener('click', () => {
-          Announcements.exportCapture(btn.dataset.captureId);
-          showToast('JSON exported', 'success');
-        });
-      });
     }
 
     const connected = BluetoothScanner.getConnectedDevice();
@@ -1127,9 +1138,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (mimicBtn) mimicBtn.disabled = !connected || !mimicSelect?.value;
   }
 
+  // Captured list: event delegation for export buttons (no per-item listeners)
+  $('captured-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-export-capture');
+    if (btn) {
+      Announcements.exportCapture(btn.dataset.captureId);
+      showToast('JSON exported', 'success');
+    }
+  });
+
   // Mimic select change — use a single handler, not re-bound each render
-  const mimicSelect = document.getElementById('mimic-select');
-  const mimicBtn = document.getElementById('btn-mimic');
+  const mimicSelect = $('mimic-select');
+  const mimicBtn = $('btn-mimic');
   mimicSelect?.addEventListener('change', () => {
     if (mimicBtn) mimicBtn.disabled = !mimicSelect?.value || !BluetoothScanner.getConnectedDevice();
   });
@@ -1334,14 +1354,101 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast(ok ? 'Link shared' : 'Link copied to clipboard', ok ? 'success' : 'info');
   });
 
+  // --- Voice Commands ---
+  const btnVoiceMic = document.getElementById('btn-voice-mic');
+  const voiceUnsupported = document.getElementById('voice-unsupported');
+  const voiceStatus = document.getElementById('voice-status');
+  const voiceLastResult = document.getElementById('voice-last-result');
+
+  if (typeof VoiceCommands !== 'undefined') {
+    const supported = VoiceCommands.isSupported();
+    if (voiceUnsupported) voiceUnsupported.classList.toggle('hidden', supported);
+    if (btnVoiceMic) btnVoiceMic.disabled = !supported;
+
+    VoiceCommands.setOnStatus((ev) => {
+      if (voiceStatus) voiceStatus.textContent = ev.message || '';
+      if (btnVoiceMic) {
+        btnVoiceMic.classList.toggle('listening', ev.type === 'listening');
+        btnVoiceMic.querySelector('.voice-mic-label').textContent =
+          ev.type === 'listening' ? 'Listening...' : 'Tap to Speak';
+      }
+      if (ev.type === 'error' && ev.message) {
+        showToast(ev.message, 'error');
+      }
+    });
+
+    VoiceCommands.setOnResult(async (result) => {
+      if (voiceLastResult) {
+        voiceLastResult.classList.remove('hidden');
+        voiceLastResult.textContent = `Heard: "${result.transcript}"`;
+        voiceLastResult.classList.remove('success', 'unknown');
+      }
+
+      const runAction = async (actionId, colorHex) => {
+        try {
+          if (actionId === 'flash_lights') {
+            await runLightActionOnAllDevices('flash');
+            showToast('Flash lights', 'success');
+          } else if (actionId === 'lights_off') {
+            await runLightActionOnAllDevices('off');
+            showToast('Lights off', 'success');
+          } else if (actionId === 'silence_all') {
+            const devices = BluetoothScanner.getDevices();
+            const connCount = devices.filter(d => d.connected).length;
+            if (connCount > 0) {
+              const confirmed = await showConfirm('Silence All',
+                `Stop audio and disconnect ${connCount} device(s)?`);
+              if (!confirmed) return;
+            }
+            if (typeof AudioPlayer !== 'undefined') AudioPlayer.stopAll();
+            for (const dev of BluetoothScanner.getDevices()) {
+              if (dev.connected) BluetoothScanner.disconnect(dev.id);
+            }
+            renderDeviceList();
+            showToast('Silenced', 'success');
+          } else if (actionId === 'stop_audio') {
+            if (typeof AudioPlayer !== 'undefined') AudioPlayer.stopAll();
+            showToast('Audio stopped', 'info');
+          } else if (actionId === 'scan') {
+            const scanTab = document.querySelector('.tab[data-tab="scanner"]');
+            if (scanTab) scanTab.click();
+            const btnScan = document.getElementById('btn-scan-all');
+            if (btnScan && !btnScan.disabled) btnScan.click();
+          } else if (actionId === 'set_color' && colorHex) {
+            await runLightActionOnAllDevices('color', colorHex);
+            showToast(`Color set: ${colorHex}`, 'success');
+          } else if (actionId === 'help') {
+            showToast('Say: Flash lights, Turn off, Silence, Stop, Scan, Set color red', 'info');
+          } else if (actionId === 'unknown') {
+            if (voiceLastResult) voiceLastResult.classList.add('unknown');
+            showToast(`Unknown: "${result.transcript}". Try "Flash lights" or "Silence"`, 'info');
+          }
+          if (voiceLastResult && actionId !== 'unknown') {
+            voiceLastResult.classList.add('success');
+          }
+        } catch (err) {
+          showToast(err?.message || 'Command failed', 'error');
+        }
+      };
+
+      await runAction(result.action, result.color);
+    });
+
+    btnVoiceMic?.addEventListener('click', () => {
+      if (VoiceCommands.isSupported()) {
+        VoiceCommands.startListening();
+      }
+    });
+  }
+
   // --- Macros ---
   function renderMacros() {
-    const list = document.getElementById('macros-list');
-    const form = document.getElementById('macro-form');
+    const list = $('macros-list');
+    const form = $('macro-form');
     if (!list) return;
     const macros = typeof Macros !== 'undefined' ? Macros.getMacros() : [];
     if (macros.length === 0) {
-      list.innerHTML = '<div class="macros-empty">No macros yet. Add one to automate light tests.</div>';
+      list.innerHTML = '<div class="macros-empty"><div class="empty-icon" aria-hidden="true">&#x2699;</div><p>No macros yet</p><p class="empty-hint">Add one to automate light tests: delay → flash → off.</p></div>';
     } else {
       list.innerHTML = macros.map(m => `
         <div class="macro-item" data-macro-id="${escapeHtml(m.id)}">
@@ -1353,29 +1460,39 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
       `).join('');
-      list.querySelectorAll('.btn-run-macro').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const id = btn.dataset.macroId;
-          await runMacroById(id);
-        });
-      });
-      list.querySelectorAll('.btn-delete-macro').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const id = btn.dataset.macroId;
-          const m = Macros.getMacro(id);
-          const confirmed = await showConfirm('Delete Macro', `Delete "${m?.name || id}"?`);
-          if (confirmed) {
-            Macros.deleteMacro(id);
-            renderMacros();
-            showToast('Macro deleted', 'info');
-          }
-        });
-      });
     }
     if (form) form.classList.add('hidden');
   }
+
+  // Macros list: event delegation (no per-item listeners on re-render)
+  $('macros-list')?.addEventListener('click', async (e) => {
+    const runBtn = e.target.closest('.btn-run-macro');
+    if (runBtn) {
+      e.stopPropagation();
+      const origText = runBtn.textContent;
+      runBtn.disabled = true;
+      runBtn.textContent = 'Running...';
+      try {
+        await runMacroById(runBtn.dataset.macroId);
+      } finally {
+        runBtn.disabled = false;
+        runBtn.textContent = origText;
+      }
+      return;
+    }
+    const delBtn = e.target.closest('.btn-delete-macro');
+    if (delBtn) {
+      e.stopPropagation();
+      const id = delBtn.dataset.macroId;
+      const m = Macros.getMacro(id);
+      const confirmed = await showConfirm('Delete Macro', `Delete "${m?.name || id}"?`);
+      if (confirmed) {
+        Macros.deleteMacro(id);
+        renderMacros();
+        showToast('Macro deleted', 'info');
+      }
+    }
+  });
 
   async function runMacroById(macroId) {
     const executor = {
