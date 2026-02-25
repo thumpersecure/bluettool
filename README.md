@@ -45,6 +45,7 @@
   - [🤖 Agentic Auto-Discovery](#-agentic-auto-discovery-advanced)
   - [📸 Screenshots](#-screenshots)
   - [📋 Log](#-log)
+  - [⚙️ Settings](#️-settings)
 - [⚠️ Disclaimer](#️-disclaimer)
 - [🛠 Tech Stack](#-tech-stack)
 - [📁 Project Structure](#-project-structure)
@@ -240,6 +241,14 @@ flowchart TB
 
 - Timestamped activity log for every operation
 - Copy full log to clipboard for reporting
+
+### ⚙️ Settings
+
+- **Appearance** — Dark/light theme toggle
+- **Audio** — Persist volume level across sessions
+- **Scan** — Scan timeout hint (seconds)
+- **Device List Defaults** — Default sort (newest/oldest/A–Z/Z–A) and filter (all/connected/available)
+- Reset to defaults
 
 ---
 

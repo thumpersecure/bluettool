@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const targetChar = dev.characteristics.find(ch =>
+    const targetChar = (dev.characteristics || []).find(ch =>
       normalizeUuid(ch.uuid) === normalizeUuid(plan.targetCharUuid)
     );
     if (!targetChar) {
@@ -674,11 +674,12 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="service-uuid">${escapeHtml(svc.uuid)}</div>`;
 
         for (const char of (svc.characteristics || [])) {
+          const props = char.properties || [];
           html += `<div class="char-item">
             <div><strong>${escapeHtml(char.name)}</strong></div>
             <div class="char-uuid">${escapeHtml(char.uuid)}</div>
             <div class="char-props">
-              ${char.properties.map(p => `<span class="char-prop-tag">${p}</span>`).join('')}
+              ${props.map(p => `<span class="char-prop-tag">${escapeHtml(p)}</span>`).join('')}
             </div>`;
 
           if (char.value) {
@@ -689,22 +690,22 @@ document.addEventListener('DOMContentLoaded', () => {
           }
 
           html += `<div class="char-actions">`;
-          if (char.properties.includes('read')) {
+          if (props.includes('read')) {
             html += `<button class="btn btn-secondary btn-small btn-char-read"
               data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">Read</button>`;
           }
-          if (char.properties.includes('notify') || char.properties.includes('indicate')) {
+          if (props.includes('notify') || props.includes('indicate')) {
             html += `<button class="btn btn-secondary btn-small btn-char-notify"
               data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">Subscribe</button>`;
           }
-          if (char.properties.includes('write') || char.properties.includes('writeNoResp')) {
+          if (props.includes('write') || props.includes('writeNoResp')) {
             html += `<button class="btn btn-warning btn-small btn-char-write-toggle"
               data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">Write</button>`;
           }
           html += `</div>`;
 
           // Write input (hidden by default)
-          if (char.properties.includes('write') || char.properties.includes('writeNoResp')) {
+          if (props.includes('write') || props.includes('writeNoResp')) {
             html += `<div class="char-write-form hidden" data-write-for="${escapeHtml(char.uuid)}">
               <input type="text" class="input-field char-write-input" placeholder="Hex value (e.g., 01:ff:ab)" data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">
               <button class="btn btn-warning btn-small btn-char-write-send" data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">Send</button>
