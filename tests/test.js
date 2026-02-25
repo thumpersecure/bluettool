@@ -295,6 +295,9 @@ assert(advJs.includes('quickScan'), 'Has quick scan');
 assert(advJs.includes('running = false'), 'Sets running=false on cancel');
 assert(advJs.includes('MAX_LOG_ENTRIES'), 'Caps agent log growth');
 assert(advJs.includes('activeRunToken'), 'Tracks active run token for stop safety');
+assert(advJs.includes('runParallelReadAgents'), 'Uses parallel read agent workers');
+assert(advJs.includes('PARALLEL_READ_AGENT_LIMIT'), 'Defines read agent concurrency limit');
+assert(advJs.includes('Promise.all(readAgents)'), 'Runs read agents in parallel');
 
 // --- Sharing Module Tests ---
 section('Sharing Module');

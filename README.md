@@ -67,11 +67,11 @@ The app will open like a native app from your home screen. The in-app Scanner ta
 - **Share App Link** — share the BlueTTool URL
 
 ### Agentic Auto-Discovery (Advanced)
-Automated BLE discovery pipeline that runs each phase sequentially:
+Automated BLE discovery pipeline with bounded parallel read agents:
 1. **Scan** — broad BLE scan to find nearby devices
 2. **Connect** — establish GATT connection
 3. **Enumerate** — discover all services and characteristics
-4. **Read** — read all accessible characteristic values
+4. **Read** — fan out readable characteristic checks across multiple parallel agents (bounded for stability)
 5. **Capture** — snapshot the full device profile
 6. **Analyze** — report findings, surface areas, and recommendations
 
