@@ -210,6 +210,7 @@ body {
   display: none;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   padding: 12px;
@@ -257,6 +258,34 @@ body {
   color: var(--text-hint);
   margin-bottom: 10px;
   line-height: 1.4;
+}
+
+/* Section descriptions — longer, logical option details */
+.section-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 8px 0 12px 0;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent-cyan-alpha-15);
+}
+.section-desc ul {
+  margin: 6px 0 0 14px;
+  padding: 0;
+}
+.section-desc li {
+  margin: 4px 0;
+}
+.section-desc strong { color: var(--text-primary); }
+.section-desc code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--accent-cyan);
 }
 
 .card-disclaimer {
@@ -1120,9 +1149,16 @@ body {
 .parallel-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 8px;
+}
+.device-list-header .device-list-header-top {
+  flex: 1 1 100%;
+  margin-bottom: 8px;
+}
+.device-list-header .device-actions-wrap {
+  flex: 1 1 100%;
 }
 
 .log-output {
