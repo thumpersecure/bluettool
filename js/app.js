@@ -264,21 +264,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Device List ---
-  BluetoothScanner.setOnDeviceFound(() => {
-    renderDeviceList();
-  });
-
-  BluetoothScanner.setOnConnectionChange((info, connected) => {
-    renderDeviceList();
-    const displayName = getDisplayName(info);
-    if (connected) {
-      showAudioOverlay();
-      AudioPlayer.triggerOnConnect();
-      showToast(`Connected to ${displayName}`, 'success');
-    } else {
-      showToast(`Disconnected from ${displayName}`, 'info');
-    }
-  });
+  // Device found and connection change callbacks are set in the Agent section
+  // to also update parallel device counts alongside device list rendering.
 
   document.getElementById('btn-clear-devices').addEventListener('click', async () => {
     const devices = BluetoothScanner.getDevices();
@@ -879,6 +866,68 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnAgentStop = document.getElementById('btn-agent-stop');
   const btnAgentFull = document.getElementById('btn-agent-full');
   const btnAgentQuick = document.getElementById('btn-agent-quick');
+  const btnAgentParallel = document.getElementById('btn-agent-parallel');
+  const btnAgentStopAll = document.getElementById('btn-agent-stop-all');
+  const parallelStatusCard = document.getElementById('parallel-status-card');
+  const parallelDeviceCount = document.getElementById('parallel-device-count');
+  const aggregateResultsCard = document.getElementById('aggregate-results-card');
+
+  function updateParallelDeviceCount() {
+    const allDevices = BluetoothScanner.getDevices();
+    const available = allDevices.filter(d => !d.connected).length;
+    if (parallelDeviceCount) {
+      parallelDeviceCount.textContent = `${available} device${available !== 1 ? 's' : ''} available for parallel scan`;
+    }
+  }
+
+  function updateAgentButtons() {
+    const running = Advanced.isRunning();
+    btnAgentStop.disabled = !running;
+    btnAgentStopAll.disabled = !running;
+    btnAgentFull.disabled = running;
+    btnAgentQuick.disabled = running;
+    btnAgentParallel.disabled = running;
+  }
+
+  function renderAgentPoolList() {
+    const poolList = document.getElementById('agent-pool-list');
+    if (!poolList) return;
+    const agentList = Advanced.getAgents();
+    if (agentList.length === 0) {
+      poolList.innerHTML = '';
+      return;
+    }
+
+    poolList.innerHTML = agentList.map(agent => {
+      const stateClass = 'agent-' + agent.state;
+      const elapsed = agent.endTime && agent.startTime
+        ? ((agent.endTime - agent.startTime) / 1000).toFixed(1)
+        : agent.startTime
+          ? (((Date.now()) - agent.startTime) / 1000).toFixed(1)
+          : '—';
+      const lastMsg = agent.log.length > 0 ? agent.log[agent.log.length - 1].message : '';
+      return `
+        <div class="agent-pool-item ${stateClass}">
+          <div class="agent-pool-header">
+            <span class="agent-pool-name">#${agent.id} ${escapeHtml(agent.deviceName)}</span>
+            <span class="agent-badge agent-badge-sm ${stateClass}">${agent.state}</span>
+          </div>
+          <div class="agent-pool-detail">
+            <span class="agent-pool-time">${elapsed}s</span>
+            <span class="agent-pool-msg">${escapeHtml(lastMsg)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const counts = Advanced.getAgentCount();
+    const runningEl = document.getElementById('parallel-running');
+    const completedEl = document.getElementById('parallel-completed');
+    const totalEl = document.getElementById('parallel-total');
+    if (runningEl) runningEl.textContent = `${counts.running} running`;
+    if (completedEl) completedEl.textContent = `${counts.completed} done`;
+    if (totalEl) totalEl.textContent = `${counts.total} total`;
+  }
 
   Advanced.setOnStatus((entry) => {
     agentStatusCard.style.display = 'block';
@@ -887,35 +936,67 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const line = document.createElement('div');
     line.className = 'agent-feed-line';
+    const prefix = entry.agentId ? `[#${entry.agentId}] ` : '';
     line.innerHTML = `<span class="agent-feed-time">${new Date(entry.time).toLocaleTimeString()}</span>
-      <span class="agent-feed-msg">${escapeHtml(entry.message)}</span>`;
+      <span class="agent-feed-msg">${escapeHtml(prefix + entry.message)}</span>`;
     agentFeed.appendChild(line);
     agentFeed.scrollTop = agentFeed.scrollHeight;
 
-    if (entry.state === 'complete' && entry.data && entry.data.analysis) {
+    if (entry.state === 'complete' && entry.data && entry.data.analysis && !entry.data.agentResults) {
       renderAgentResults(entry.data);
     }
 
-    const isRunning = Advanced.isRunning();
-    btnAgentStop.disabled = !isRunning;
-    btnAgentFull.disabled = isRunning;
-    btnAgentQuick.disabled = isRunning;
+    updateAgentButtons();
+    renderAgentPoolList();
+  });
+
+  Advanced.setOnAggregate((event) => {
+    if (event.type === 'start') {
+      parallelStatusCard.style.display = 'block';
+      renderAgentPoolList();
+    } else if (event.type === 'agent_complete') {
+      renderAgentPoolList();
+    } else if (event.type === 'complete' && event.aggregate) {
+      renderAggregateResults(event.aggregate);
+      renderAgentPoolList();
+      updateAgentButtons();
+    }
   });
 
   btnAgentFull.addEventListener('click', async () => {
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
+    aggregateResultsCard.style.display = 'none';
     document.getElementById('vuln-report-card').style.display = 'none';
     await Advanced.runFullDiscovery();
     renderDeviceList();
+    updateAgentButtons();
   });
 
   btnAgentQuick.addEventListener('click', async () => {
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
+    aggregateResultsCard.style.display = 'none';
     document.getElementById('vuln-report-card').style.display = 'none';
     await Advanced.quickScan();
     renderDeviceList();
+    updateAgentButtons();
+  });
+
+  btnAgentParallel.addEventListener('click', async () => {
+    agentFeed.innerHTML = '';
+    agentResultsCard.style.display = 'none';
+    aggregateResultsCard.style.display = 'none';
+    document.getElementById('vuln-report-card').style.display = 'none';
+    parallelStatusCard.style.display = 'none';
+    Advanced.clearAgents();
+    updateAgentButtons();
+    const results = await Advanced.runParallelDiscovery();
+    renderDeviceList();
+    updateAgentButtons();
+    if (results && results.length > 0) {
+      showToast(`Parallel scan complete — ${results.length} device(s) analyzed`, 'success');
+    }
   });
 
   btnAgentStop.addEventListener('click', () => {
@@ -923,13 +1004,109 @@ document.addEventListener('DOMContentLoaded', () => {
     agentStatusCard.style.display = 'none';
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
+    aggregateResultsCard.style.display = 'none';
+    parallelStatusCard.style.display = 'none';
     document.getElementById('vuln-report-card').style.display = 'none';
     agentBadge.textContent = 'idle';
     agentBadge.className = 'agent-badge agent-idle';
     btnAgentStop.disabled = true;
+    btnAgentStopAll.disabled = true;
     btnAgentFull.disabled = false;
     btnAgentQuick.disabled = false;
+    btnAgentParallel.disabled = false;
     showToast('Agent stopped', 'info');
+  });
+
+  btnAgentStopAll.addEventListener('click', () => {
+    Advanced.stop();
+    parallelStatusCard.style.display = 'none';
+    agentStatusCard.style.display = 'none';
+    agentFeed.innerHTML = '';
+    agentResultsCard.style.display = 'none';
+    aggregateResultsCard.style.display = 'none';
+    document.getElementById('vuln-report-card').style.display = 'none';
+    agentBadge.textContent = 'idle';
+    agentBadge.className = 'agent-badge agent-idle';
+    updateAgentButtons();
+    showToast('All agents stopped', 'info');
+  });
+
+  function renderAggregateResults(aggregate) {
+    if (!aggregate) return;
+    aggregateResultsCard.style.display = 'block';
+
+    const statsEl = document.getElementById('aggregate-stats');
+    const resultsEl = document.getElementById('aggregate-results');
+
+    statsEl.innerHTML = [
+      `Devices: ${aggregate.totalDevices}`,
+      `Services: ${aggregate.totalServices}`,
+      `Characteristics: ${aggregate.totalCharacteristics}`,
+      `Readable: ${aggregate.totalReadable}`,
+      `Writable: ${aggregate.totalWritable}`,
+      `High Risk: ${aggregate.highRiskDevices}`
+    ].map(s => `<span class="aggregate-stat">${s}</span>`).join('');
+
+    const a = aggregate.analysis || {};
+    const summary = Array.isArray(a.summary) ? a.summary : [];
+    const riskFactors = Array.isArray(a.riskFactors) ? a.riskFactors : [];
+    const recommendations = Array.isArray(a.recommendations) ? a.recommendations : [];
+
+    let html = '<div class="agent-results-section">';
+    html += '<h3>Summary</h3>';
+    html += '<ul>' + summary.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
+
+    if (riskFactors.length > 0) {
+      html += '<h3>Findings</h3>';
+      html += '<ul class="agent-risks">' +
+        riskFactors.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
+    }
+
+    if (recommendations.length > 0) {
+      html += '<h3>Recommendations</h3>';
+      html += '<ul>' + recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
+    }
+
+    html += '</div>';
+
+    if (aggregate.agentResults) {
+      html += '<h3 style="margin-top:12px;">Per-Device Results</h3>';
+      for (const r of aggregate.agentResults) {
+        if (!r.analysis) continue;
+        html += `<div class="per-device-result">`;
+        html += `<div class="per-device-header">${escapeHtml(r.deviceName || 'Unknown')}</div>`;
+        html += `<div class="per-device-stats">${r.servicesFound} svc, ${r.characteristicsFound} char, ${r.readableValues} read, ${r.writableChars} write</div>`;
+        if (r.vulnReport) {
+          html += `<div class="per-device-risk risk-${r.vulnReport.riskLevel.toLowerCase()}">${r.vulnReport.riskLevel} (${r.vulnReport.riskScore}/100)</div>`;
+        }
+        html += `</div>`;
+      }
+    }
+
+    resultsEl.innerHTML = html;
+
+    const highestRiskResult = aggregate.agentResults?.find(r => r.vulnReport);
+    if (highestRiskResult?.vulnReport) {
+      renderVulnReport(highestRiskResult.vulnReport);
+    }
+  }
+
+  BluetoothScanner.setOnDeviceFound(() => {
+    renderDeviceList();
+    updateParallelDeviceCount();
+  });
+
+  BluetoothScanner.setOnConnectionChange((info, connected) => {
+    renderDeviceList();
+    updateParallelDeviceCount();
+    const displayName = getDisplayName(info);
+    if (connected) {
+      showAudioOverlay();
+      AudioPlayer.triggerOnConnect();
+      showToast(`Connected to ${displayName}`, 'success');
+    } else {
+      showToast(`Disconnected from ${displayName}`, 'info');
+    }
   });
 
   function renderAgentResults(data) {
