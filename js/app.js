@@ -319,6 +319,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const deviceTypeLabel = getDeviceTypeLabel(dev);
       const plan = dev.lightTestPlan;
       const hasLightPlan = !!(plan?.available);
+      const writableCount = (dev.characteristics || []).filter(ch =>
+        ch.properties?.includes('write') || ch.properties?.includes('writeNoResp')
+      ).length;
       return `
       <div class="device-item" data-device-id="${escapeHtml(dev.id)}">
         <div class="device-item-header">
@@ -333,6 +336,8 @@ document.addEventListener('DOMContentLoaded', () => {
           ${dev.connected ? '<span class="device-tag tag-connected">GATT</span>' : ''}
           ${deviceTypeLabel ? `<span class="device-tag tag-light">${escapeHtml(deviceTypeLabel)}</span>` : ''}
           ${hasLightPlan ? `<span class="device-tag tag-best-test">Best: ${escapeHtml(plan.bestActionLabel || plan.bestAction)}</span>` : ''}
+          ${dev.connected && !hasLightPlan && writableCount === 0 ? '<span class="device-tag tag-best-test">No writable chars</span>' : ''}
+          ${!dev.connected ? '<span class="device-tag tag-best-test">Connect for tests</span>' : ''}
           ${dev.services.length > 0 ? `<span class="device-tag tag-service">${dev.services.length} svc</span>` : ''}
           ${dev.characteristics.length > 0 ? `<span class="device-tag tag-char">${dev.characteristics.length} char</span>` : ''}
           <span class="device-tag tag-time">${new Date(dev.discovered).toLocaleTimeString()}</span>
@@ -470,6 +475,22 @@ document.addEventListener('DOMContentLoaded', () => {
           <button class="btn btn-danger btn-small btn-detail-light-test" data-action="off" data-device-id="${escapeHtml(dev.id)}" ${dev.connected && lightPlan.actions?.off ? '' : 'disabled'}>Off</button>
         </div>
         <p class="hint light-test-hint">${dev.connected ? 'Tip: use device name + ID to avoid mixing up similar lights.' : 'Connect first to run test commands.'}</p>
+      </div>
+      `;
+    } else {
+      const writableCount = (dev.characteristics || []).filter(ch =>
+        ch.properties?.includes('write') || ch.properties?.includes('writeNoResp')
+      ).length;
+      html += `
+      <div class="detail-section light-test-section">
+        <h3>Smart Light Test Commands</h3>
+        <p class="hint light-test-hint">
+          ${dev.connected
+            ? (writableCount > 0
+              ? 'Connected. No light-specific signature found yet. Reconnect to re-enumerate or use manual Write controls below.'
+              : 'Connected, but no writable GATT characteristics were found for test commands.')
+            : 'Connect & enumerate this device to reveal Flash/Color/Off light testing options.'}
+        </p>
       </div>
       `;
     }

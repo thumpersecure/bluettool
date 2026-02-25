@@ -596,10 +596,6 @@ const BluetoothScanner = (() => {
       isLikelyLightService(targetServiceUuid) ||
       /(light|led|rgb|color|bulb|lamp)/i.test(`${info?.name || ''} ${targetChar?.name || ''}`);
 
-    if (!lightContext && targetUuid !== '00002a06-0000-1000-8000-00805f9b34fb') {
-      return null;
-    }
-
     if (targetUuid === '00002a06-0000-1000-8000-00805f9b34fb') {
       return {
         available: true,
@@ -656,8 +652,10 @@ const BluetoothScanner = (() => {
       targetCharName: targetChar.name,
       bestAction: supportsColor ? 'color' : 'flash',
       bestActionLabel: supportsColor ? 'Color' : 'Flash',
-      reason: `Using writable characteristic ${targetChar.name} (${targetChar.uuid}).`,
-      confidence: 'medium',
+      reason: lightContext
+        ? `Using writable characteristic ${targetChar.name} (${targetChar.uuid}).`
+        : `No known light profile matched. Using writable characteristic ${targetChar.name} (${targetChar.uuid}) as a generic best-effort test target.`,
+      confidence: lightContext ? 'medium' : 'low',
       actions
     };
   }
