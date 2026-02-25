@@ -328,6 +328,7 @@ assert(appJs.includes('Replaying...'), 'Shows replaying status during replay');
 assert(appJs.includes('Replay complete'), 'Shows success toast on replay complete');
 assert(appJs.includes('Replay failed'), 'Shows error toast on replay failure');
 assert(appJs.includes('btn-export-capture'), 'Wires export capture button');
+assert(appJs.includes('btn-import-captures'), 'Wires import captures button');
 assert(appJs.includes('empty-cta-devices'), 'Empty state CTA goes to Devices tab');
 
 // --- Audio Player Tests ---
