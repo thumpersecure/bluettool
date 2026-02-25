@@ -43,6 +43,7 @@ const requiredFiles = [
   'js/vulnerability.js',
   'js/advanced.js',
   'js/sharing.js',
+  'js/macros.js',
   'audio/dtmf-fax-tones.wav',
   'README.md',
   'sw.js',
@@ -140,6 +141,7 @@ assert(html.includes('personal testing'), 'Disclaimer mentions personal testing'
 const scriptOrder = [
   'js/logger.js',
   'js/browser-compat.js',
+  'js/macros.js',
   'js/bluetooth-scanner.js',
   'js/announcements.js',
   'js/audio-player.js',
@@ -171,6 +173,7 @@ const jsFiles = [
   'js/vulnerability.js',
   'js/advanced.js',
   'js/sharing.js',
+  'js/macros.js',
 ];
 
 for (const file of jsFiles) {
@@ -290,6 +293,8 @@ assert(appJs.includes('btn-flash-all-lights'), 'Wires flash all lights button');
 assert(appJs.includes('btn-off-all-lights'), 'Wires turn off all lights button');
 assert(appJs.includes('btn-set-color-all-lights'), 'Wires set color on all lights button');
 assert(appJs.includes('dtmf-speed'), 'Wires DTMF speed selector to play');
+assert(appJs.includes('btn-play-custom-dtmf'), 'Wires custom DTMF play button');
+assert(appJs.includes('playCustomDTMFSequence'), 'Calls playCustomDTMFSequence for custom sequence');
 assert(appJs.includes('light-color-picker'), 'Wires light color picker');
 assert(appJs.includes('light-color-hex'), 'Wires light color hex input');
 assert(appJs.includes('Enter valid hex color'), 'Validates color input format');

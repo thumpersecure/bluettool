@@ -28,7 +28,8 @@ const Announcements = (() => {
    * @param {boolean} [options.reRead=true] - if true, re-read readable characteristics during capture
    */
   async function captureFromDeviceId(deviceId, options = {}) {
-    const deviceInfo = BluetoothScanner.getDevice(deviceId);
+    const deviceInfo = BluetoothScanner.getDevice(deviceId) ||
+      (BluetoothScanner.getDevices?.() || []).find(d => d.id === deviceId);
     if (!deviceInfo || !deviceInfo.connected) {
       Logger.error('Device not connected - connect to a device first');
       throw new Error('No device connected');

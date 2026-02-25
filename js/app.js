@@ -179,6 +179,34 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // --- Device Notes (localStorage) ---
+  const DEVICE_NOTES_KEY = 'bluettool_device_notes';
+
+  function getDeviceNotes(deviceId) {
+    try {
+      const raw = localStorage.getItem(DEVICE_NOTES_KEY);
+      if (!raw) return '';
+      const map = JSON.parse(raw);
+      return String(map[deviceId] || '').trim();
+    } catch {
+      return '';
+    }
+  }
+
+  function setDeviceNotes(deviceId, notes) {
+    try {
+      const raw = localStorage.getItem(DEVICE_NOTES_KEY);
+      const map = raw ? JSON.parse(raw) : {};
+      const trimmed = String(notes || '').trim();
+      if (trimmed) {
+        map[deviceId] = trimmed;
+      } else {
+        delete map[deviceId];
+      }
+      localStorage.setItem(DEVICE_NOTES_KEY, JSON.stringify(map));
+    } catch (_) { /* ignore */ }
+  }
+
   // --- Settings (localStorage) ---
   // Use bluettool_* prefix for any new localStorage keys (e.g. bluettool_call_history, bluettool_captures)
   const SETTINGS_KEY = 'bluettool_settings';
@@ -1916,4 +1944,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
   Logger.info('Ready. Use Bluefy browser on iOS for full BLE support.');
   renderCaptures(); // Initial Replay tab state
+  updateQuickReconnectUI(); // Show quick reconnect if last device available
 });
