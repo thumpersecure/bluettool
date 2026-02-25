@@ -125,9 +125,10 @@ assert(html.includes('audio-visualizer'), 'Has audio visualizer');
 assert(html.includes('card-disclaimer'), 'Has disclaimer card');
 assert(html.includes('personal testing'), 'Disclaimer mentions personal testing');
 
-// Script load order
+// Script load order (browser-compat must load before bluetooth-scanner for compat matrix)
 const scriptOrder = [
   'js/logger.js',
+  'js/browser-compat.js',
   'js/bluetooth-scanner.js',
   'js/announcements.js',
   'js/audio-player.js',

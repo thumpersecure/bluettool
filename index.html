@@ -2,12 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="BlueTTool">
   <meta name="theme-color" content="#0a0e27">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="mobile-web-app-capable" content="yes">
   <link rel="apple-touch-icon" href="icons/icon-180.svg">
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-192.svg">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.svg">
+  <link rel="apple-touch-icon" sizes="167x167" href="icons/icon-192.svg">
   <link rel="manifest" href="manifest.json">
   <title>BlueTTool</title>
   <link rel="stylesheet" href="css/style.css">
@@ -29,33 +34,51 @@
     </header>
 
     <!-- Navigation Tabs -->
-    <nav id="tab-bar">
-      <button class="tab active" data-tab="scanner">Scan</button>
-      <button class="tab" data-tab="devices">Devices</button>
-      <button class="tab" data-tab="audio">Audio</button>
-      <button class="tab" data-tab="calls">Calls</button>
-      <button class="tab" data-tab="advanced">Agent</button>
-      <button class="tab" data-tab="log">Log</button>
+    <nav id="tab-bar" role="tablist" aria-label="Main navigation">
+      <button id="tab-scanner" class="tab active" role="tab" aria-selected="true" aria-controls="scanner" data-tab="scanner">Scan</button>
+      <button id="tab-devices" class="tab" role="tab" aria-selected="false" aria-controls="devices" data-tab="devices">Devices</button>
+      <button id="tab-audio" class="tab" role="tab" aria-selected="false" aria-controls="audio" data-tab="audio">Audio</button>
+      <button id="tab-calls" class="tab" role="tab" aria-selected="false" aria-controls="calls" data-tab="calls">Calls</button>
+      <button id="tab-advanced" class="tab" role="tab" aria-selected="false" aria-controls="advanced" data-tab="advanced">Agent</button>
+      <button id="tab-log" class="tab" role="tab" aria-selected="false" aria-controls="log" data-tab="log">Log</button>
+      <button id="tab-settings" class="tab" role="tab" aria-selected="false" aria-controls="settings" data-tab="settings">Settings</button>
     </nav>
 
     <!-- Scanner Tab -->
-    <section id="scanner" class="tab-content active">
+    <section id="scanner" class="tab-content active" role="tabpanel" aria-labelledby="tab-scanner">
       <div class="card">
         <h2>BLE Device Scanner</h2>
         <p class="hint">Scans for nearby BLE devices via Web Bluetooth in Bluefy. Tap to open device chooser.</p>
         <div class="scan-controls">
-          <button id="btn-scan" class="btn btn-primary btn-large">
+          <button id="btn-scan" class="btn btn-primary btn-large" aria-label="Scan for BLE devices">
             Scan for Devices
           </button>
-          <button id="btn-scan-all" class="btn btn-secondary">
+          <button id="btn-scan-all" class="btn btn-secondary" aria-label="Scan for all devices without filter">
             Scan All (No Filter)
           </button>
         </div>
         <div id="classic-bt-section" class="filter-section" style="margin-top:12px;">
           <h3>Classic Bluetooth (Chrome 117+)</h3>
           <p class="hint">Web Serial API connects to paired Bluetooth Classic devices (RFCOMM/SPP).</p>
+          <div id="classic-bt-unavailable" class="classic-bt-unavailable hidden">
+            <span class="classic-bt-message">Classic BT requires Chrome 117+ — not available in Bluefy/Safari.</span>
+          </div>
           <button id="btn-serial-connect" class="btn btn-secondary">Connect Classic BT Device</button>
           <span id="serial-status" class="serial-status"></span>
+        </div>
+        <div id="scan-options" class="filter-section">
+          <h3>Scan Options</h3>
+          <label class="toggle-label">
+            <span>Scan duration hint (seconds)</span>
+          </label>
+          <select id="scan-duration-hint" class="input-field">
+            <option value="0">Default (browser)</option>
+            <option value="5">5 seconds</option>
+            <option value="10">10 seconds</option>
+            <option value="15">15 seconds</option>
+            <option value="30">30 seconds</option>
+          </select>
+          <p class="hint" style="margin-top:4px;">Hint for how long to show device picker. Actual behavior depends on browser.</p>
         </div>
         <div id="scan-filters" class="filter-section">
           <h3>Scan Filters</h3>
@@ -75,6 +98,10 @@
       <div class="card" id="compatibility-card">
         <h2>Browser Compatibility</h2>
         <div id="compat-status"></div>
+        <div id="compat-matrix" class="compat-matrix"></div>
+        <p class="compat-help-link">
+          <a href="https://github.com/thumpersecure/bluettool/blob/main/RECOMMENDATIONS.md" target="_blank" rel="noopener">View full compatibility guide</a>
+        </p>
       </div>
 
       <div class="card" id="bluefy-home-screen-card">
@@ -97,21 +124,34 @@
     </section>
 
     <!-- Devices Tab -->
-    <section id="devices" class="tab-content">
+    <section id="devices" class="tab-content" role="tabpanel" aria-labelledby="tab-devices">
       <div class="card">
         <div class="device-list-header">
           <h2>Discovered Devices</h2>
-          <div class="device-actions">
+          <div class="device-actions device-actions-wrap">
+            <button id="btn-refresh-devices" class="btn btn-secondary btn-small" title="Refresh list">&#8635; Refresh</button>
+            <select id="device-sort" class="input-select-small">
+              <option value="date-desc">Sort: Newest</option>
+              <option value="date-asc">Sort: Oldest</option>
+              <option value="name-asc">Sort: A–Z</option>
+              <option value="name-desc">Sort: Z–A</option>
+            </select>
+            <select id="device-filter" class="input-select-small">
+              <option value="all">All</option>
+              <option value="connected">Connected</option>
+              <option value="available">Available</option>
+            </select>
             <button id="btn-clear-devices" class="btn btn-danger btn-small">Clear All</button>
             <button id="btn-export-devices" class="btn btn-secondary btn-small">Export CSV</button>
           </div>
         </div>
       </div>
       <div id="device-list" class="device-list">
-        <div class="empty-state">
-          <div class="empty-icon">&#x1F4E1;</div>
+        <div class="empty-state" id="devices-empty-state">
+          <div class="empty-icon" aria-hidden="true">&#x1F4E1;</div>
           <p>No devices discovered yet</p>
-          <p class="empty-hint">Go to Scan tab to find nearby BLE devices</p>
+          <p class="empty-hint">Tap <strong>Scan</strong> to find nearby BLE devices. Make sure Bluetooth is on.</p>
+          <button type="button" class="empty-cta" id="empty-cta-scan" aria-label="Go to Scan tab">Go to Scan</button>
         </div>
       </div>
 
@@ -143,7 +183,7 @@
     </section>
 
     <!-- Audio Tab -->
-    <section id="audio" class="tab-content">
+    <section id="audio" class="tab-content" role="tabpanel" aria-labelledby="tab-audio">
       <div class="card">
         <h2>Audio Test Tools</h2>
         <p class="hint">Play DTMF/fax tones for Bluetooth audio testing. Stop audio or disconnect speakers.</p>
@@ -191,7 +231,7 @@
     </section>
 
     <!-- Calls Tab -->
-    <section id="calls" class="tab-content">
+    <section id="calls" class="tab-content" role="tabpanel" aria-labelledby="tab-calls">
       <div class="card">
         <h2>Call History</h2>
         <p class="hint">Import call history from your iPhone. Export from Settings &gt; Phone or use a call history backup app, then import the CSV/JSON file here.</p>
@@ -207,17 +247,18 @@
           <h3>Calls</h3>
         </div>
         <div id="call-list" class="call-list">
-          <div class="empty-state">
-            <div class="empty-icon">&#x1F4DE;</div>
+          <div class="empty-state" id="calls-empty-state">
+            <div class="empty-icon" aria-hidden="true">&#x1F4DE;</div>
             <p>No calls imported yet</p>
-            <p class="empty-hint">Import a CSV or JSON file to view call history</p>
+            <p class="empty-hint">Export from iPhone Settings → Phone, or use a call history backup app, then import the file here.</p>
+            <button type="button" class="empty-cta" id="empty-cta-import-calls" aria-label="Import call history">Import Calls</button>
           </div>
         </div>
       </div>
     </section>
 
     <!-- Advanced / Agent Tab -->
-    <section id="advanced" class="tab-content">
+    <section id="advanced" class="tab-content" role="tabpanel" aria-labelledby="tab-advanced">
       <div class="card">
         <h2>Agentic Auto-Discovery</h2>
         <p class="hint">Automated BLE pipeline: scan, connect, enumerate, read, capture, and analyze &mdash; all in one tap. Real-time status feed.</p>
@@ -286,8 +327,94 @@
       </div>
     </section>
 
+    <!-- Settings Tab -->
+    <section id="settings" class="tab-content" role="tabpanel" aria-labelledby="tab-settings">
+      <div class="card">
+        <h2>Settings &amp; Options</h2>
+        <p class="hint">Preferences are saved automatically. Changes apply immediately.</p>
+
+        <div class="settings-section">
+          <button class="settings-toggle" data-toggle="appearance" aria-expanded="false">
+            <span>Appearance</span>
+            <span class="toggle-chevron">&#9660;</span>
+          </button>
+          <div class="settings-panel" id="panel-appearance">
+            <label class="toggle-label">
+              <input type="checkbox" id="setting-theme-dark" checked>
+              <span>Dark theme</span>
+            </label>
+            <p class="hint" style="margin-top:4px;">Toggle off for light theme.</p>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <button class="settings-toggle" data-toggle="audio" aria-expanded="false">
+            <span>Audio</span>
+            <span class="toggle-chevron">&#9660;</span>
+          </button>
+          <div class="settings-panel" id="panel-audio">
+            <label class="toggle-label">
+              <input type="checkbox" id="setting-persist-volume" checked>
+              <span>Persist volume level</span>
+            </label>
+            <p class="hint" style="margin-top:4px;">Remember volume across sessions.</p>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <button class="settings-toggle" data-toggle="scan" aria-expanded="false">
+            <span>Scan</span>
+            <span class="toggle-chevron">&#9660;</span>
+          </button>
+          <div class="settings-panel" id="panel-scan">
+            <label class="toggle-label">
+              <span>Scan timeout hint (seconds)</span>
+            </label>
+            <select id="setting-scan-timeout" class="input-field">
+              <option value="0">Default</option>
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="15">15</option>
+              <option value="30">30</option>
+            </select>
+            <p class="hint" style="margin-top:4px;">Hint for scan timeout. Browser may ignore.</p>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <button class="settings-toggle" data-toggle="devices" aria-expanded="false">
+            <span>Device List Defaults</span>
+            <span class="toggle-chevron">&#9660;</span>
+          </button>
+          <div class="settings-panel" id="panel-devices">
+            <label class="toggle-label">
+              <span>Default sort</span>
+            </label>
+            <select id="setting-default-sort" class="input-field">
+              <option value="date-desc">Newest first</option>
+              <option value="date-asc">Oldest first</option>
+              <option value="name-asc">Name A–Z</option>
+              <option value="name-desc">Name Z–A</option>
+            </select>
+            <label class="toggle-label" style="margin-top:10px;">
+              <span>Default filter</span>
+            </label>
+            <select id="setting-default-filter" class="input-field">
+              <option value="all">All devices</option>
+              <option value="connected">Connected only</option>
+              <option value="available">Available only</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button id="btn-reset-settings" class="btn btn-secondary btn-small">Reset to Defaults</button>
+        </div>
+      </div>
+    </section>
+
     <!-- Log Tab -->
-    <section id="log" class="tab-content">
+    <section id="log" class="tab-content" role="tabpanel" aria-labelledby="tab-log">
       <div class="card">
         <div class="log-header">
           <h2>Activity Log</h2>
@@ -328,6 +455,7 @@
   </div>
 
   <script src="js/logger.js"></script>
+  <script src="js/browser-compat.js"></script>
   <script src="js/call-history.js"></script>
   <script src="js/bluetooth-scanner.js"></script>
   <script src="js/serial-bluetooth.js"></script>

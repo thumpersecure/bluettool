@@ -49,14 +49,14 @@ const Announcements = (() => {
       readableChars: 0
     };
 
-    for (const svc of deviceInfo.services) {
+    for (const svc of (deviceInfo.services || [])) {
       const svcCapture = {
         uuid: svc.uuid,
         name: svc.name,
         characteristics: []
       };
 
-      for (const char of svc.characteristics) {
+      for (const char of (svc.characteristics || [])) {
         profile.totalChars++;
         const charCapture = {
           uuid: char.uuid,
@@ -67,7 +67,7 @@ const Announcements = (() => {
         };
 
         // Re-read current values (optional)
-        if (reRead && char.properties.includes('read')) {
+        if (reRead && (char.properties || []).includes('read')) {
           try {
             const updated = await BluetoothScanner.readCharacteristic(char);
             charCapture.value = updated.value;
