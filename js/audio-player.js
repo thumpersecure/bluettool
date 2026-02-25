@@ -164,6 +164,7 @@ const AudioPlayer = (() => {
 
   /**
    * Play the pre-generated WAV file from the repo.
+   * Falls back to live DTMF sequence if file is missing (e.g. 404).
    */
   function playFile() {
     if (isPlaying) return;
@@ -180,8 +181,9 @@ const AudioPlayer = (() => {
     fileAudioEl.play().then(() => {
       Logger.success('Audio file playback started');
     }).catch(err => {
-      Logger.error('Could not play audio file: ' + err.message);
+      Logger.error('Could not play audio file: ' + err.message + ' — using live DTMF instead');
       isPlaying = false;
+      playDTMFSequence();
     });
 
     fileAudioEl.onended = () => {
@@ -192,6 +194,7 @@ const AudioPlayer = (() => {
 
   /**
    * Get the WAV file as a Blob for sharing.
+   * If file is missing, generates a short DTMF sequence and returns as Blob.
    */
   async function getAudioBlob() {
     try {
