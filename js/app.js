@@ -764,6 +764,77 @@ document.addEventListener('DOMContentLoaded', () => {
       `).join('');
   }
 
+  // --- Calls Tab ---
+  const callImportInput = document.getElementById('call-import-input');
+  const btnImportCalls = document.getElementById('btn-import-calls');
+  const btnExportCalls = document.getElementById('btn-export-calls');
+  const btnClearCalls = document.getElementById('btn-clear-calls');
+  const callList = document.getElementById('call-list');
+
+  btnImportCalls.addEventListener('click', () => callImportInput.click());
+
+  callImportInput.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const count = await CallHistory.importFromFile(file);
+      renderCallList();
+      showToast(`Imported ${count} call(s)`, 'success');
+    } catch (err) {
+      Logger.error('Call import failed:', err);
+      showToast('Import failed: ' + (err.message || 'Invalid file'), 'error');
+    }
+    callImportInput.value = '';
+  });
+
+  btnExportCalls.addEventListener('click', () => {
+    const calls = CallHistory.getCalls();
+    if (calls.length === 0) {
+      showToast('No calls to export', 'info');
+      return;
+    }
+    const csv = CallHistory.exportToCSV();
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'call-history.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV exported', 'success');
+  });
+
+  btnClearCalls.addEventListener('click', async () => {
+    const calls = CallHistory.getCalls();
+    if (calls.length === 0) return;
+    const confirmed = await showConfirm('Clear Call History',
+      `Remove ${calls.length} call(s) from the list?`);
+    if (!confirmed) return;
+    CallHistory.clearCalls();
+    renderCallList();
+    showToast('Call history cleared', 'info');
+  });
+
+  function renderCallList() {
+    const calls = CallHistory.getCalls();
+    if (calls.length === 0) {
+      callList.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">&#x1F4DE;</div>
+        <p>No calls imported yet</p>
+        <p class="empty-hint">Import a CSV or JSON file to view call history</p>
+      </div>`;
+      return;
+    }
+    callList.innerHTML = calls.map(c => `
+      <div class="call-item">
+        <span class="call-item-date">${escapeHtml(c.date)}</span>
+        <span class="call-item-number">${escapeHtml(c.name || c.number)}</span>
+        <span class="call-item-duration">${escapeHtml(c.duration)}</span>
+        <span class="call-item-type">${escapeHtml(c.type)}</span>
+      </div>
+    `).join('');
+  }
+
   // --- Log Tab ---
   document.getElementById('btn-copy-log').addEventListener('click', () => {
     Logger.copyToClipboard();

@@ -33,6 +33,7 @@
       <button class="tab active" data-tab="scanner">Scan</button>
       <button class="tab" data-tab="devices">Devices</button>
       <button class="tab" data-tab="audio">Audio</button>
+      <button class="tab" data-tab="calls">Calls</button>
       <button class="tab" data-tab="advanced">Agent</button>
       <button class="tab" data-tab="log">Log</button>
     </nav>
@@ -172,6 +173,32 @@
       </div>
     </section>
 
+    <!-- Calls Tab -->
+    <section id="calls" class="tab-content">
+      <div class="card">
+        <h2>Call History</h2>
+        <p class="hint">Import call history from your iPhone. Export from Settings &gt; Phone or use a call history backup app, then import the CSV/JSON file here.</p>
+        <div class="call-history-controls">
+          <input type="file" id="call-import-input" accept=".csv,.json,text/csv,application/json" class="input-file-hidden">
+          <button id="btn-import-calls" class="btn btn-primary">Import</button>
+          <button id="btn-export-calls" class="btn btn-secondary">Export CSV</button>
+          <button id="btn-clear-calls" class="btn btn-danger">Clear</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="call-list-header">
+          <h3>Calls</h3>
+        </div>
+        <div id="call-list" class="call-list">
+          <div class="empty-state">
+            <div class="empty-icon">&#x1F4DE;</div>
+            <p>No calls imported yet</p>
+            <p class="empty-hint">Import a CSV or JSON file to view call history</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Advanced / Agent Tab -->
     <section id="advanced" class="tab-content">
       <div class="card">
@@ -252,6 +279,7 @@
   </div>
 
   <script src="js/logger.js"></script>
+  <script src="js/call-history.js"></script>
   <script src="js/bluetooth-scanner.js"></script>
   <script src="js/announcements.js"></script>
   <script src="js/audio-player.js"></script>
