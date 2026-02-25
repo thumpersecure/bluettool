@@ -159,9 +159,11 @@ document.addEventListener('DOMContentLoaded', () => {
       titleEl.textContent = title;
       messageEl.textContent = message;
       dialog.classList.remove('hidden');
+      dialog.setAttribute('aria-hidden', 'false');
 
       function cleanup(result) {
         dialog.classList.add('hidden');
+        dialog.setAttribute('aria-hidden', 'true');
         okBtn.removeEventListener('click', onOk);
         cancelBtn.removeEventListener('click', onCancel);
         dialog.removeEventListener('click', onOverlayClick);
@@ -1426,12 +1428,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Audio Overlay ---
   function showAudioOverlay() {
     const overlay = document.getElementById('audio-overlay');
-    if (overlay) overlay.classList.remove('hidden');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+      overlay.setAttribute('aria-hidden', 'false');
+    }
   }
 
   document.getElementById('btn-close-audio-overlay')?.addEventListener('click', () => {
     const overlay = document.getElementById('audio-overlay');
-    if (overlay) overlay.classList.add('hidden');
+    if (overlay) {
+      overlay.classList.add('hidden');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
     if (typeof AudioPlayer !== 'undefined') AudioPlayer.stopAll();
   });
 

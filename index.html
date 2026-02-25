@@ -15,7 +15,12 @@
   <link rel="apple-touch-icon" sizes="167x167" href="icons/icon-192.svg">
   <link rel="manifest" href="manifest.json">
   <title>BlueTTool</title>
+  <link rel="preload" href="css/style.css" as="style">
   <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Critical: prevent white flash before CSS loads */
+    body{background:#0a0e27;color:#e8eaf6}
+  </style>
 </head>
 <body>
   <div id="app">
@@ -452,7 +457,7 @@
               <option value="15">15</option>
               <option value="30">30</option>
             </select>
-            <p class="hint" style="margin-top:4px;">Hint for scan timeout. Browser may ignore.</p>
+            <p class="hint hint-spaced">Hint for scan timeout. Browser may ignore.</p>
           </div>
         </div>
 
@@ -471,7 +476,7 @@
               <option value="name-asc">Name A–Z</option>
               <option value="name-desc">Name Z–A</option>
             </select>
-            <label class="toggle-label" style="margin-top:10px;">
+            <label class="toggle-label settings-label-spaced">
               <span>Default filter</span>
             </label>
             <select id="setting-default-filter" class="input-field">
@@ -503,9 +508,9 @@
     </section>
 
     <!-- Audio Overlay -->
-    <div id="audio-overlay" class="overlay hidden">
+    <div id="audio-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="audio-overlay-title" aria-hidden="true">
       <div class="overlay-content">
-        <h2>DTMF Test Tones</h2>
+        <h2 id="audio-overlay-title">DTMF Test Tones</h2>
         <p id="audio-overlay-message">Playing fax/DTMF tone sequence...</p>
         <div class="audio-visualizer" id="audio-visualizer">
           <div class="viz-bar"></div><div class="viz-bar"></div><div class="viz-bar"></div>
@@ -517,7 +522,7 @@
     </div>
 
     <!-- Confirm Dialog -->
-    <div id="confirm-dialog" class="overlay hidden">
+    <div id="confirm-dialog" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-hidden="true">
       <div class="overlay-content">
         <h2 id="confirm-title">Confirm</h2>
         <p id="confirm-message"></p>
