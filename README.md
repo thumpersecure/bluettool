@@ -342,20 +342,20 @@ flowchart LR
     subgraph Tabs["App Tabs"]
         S[Scanner]
         D[Devices]
+        A[Audio + Share]
         C[Call History]
-        A[Audio]
-        Sh[Share]
         Ag[Agent]
         L[Log]
+        St[Settings]
     end
     
     S --> D
     D --> S
-    C --> C
     A --> A
-    Sh --> Sh
+    C --> C
     Ag --> D
     L --> L
+    St --> St
 ```
 
 </details>

@@ -673,6 +673,7 @@ body {
   align-items: center;
   width: 100%;
   padding: 10px 0;
+  min-height: 44px;
   background: none;
   border: none;
   color: var(--text-primary);
