@@ -109,6 +109,11 @@ assert(html.includes('id="captured-list"'), 'Has captured list in replay tab');
 assert(html.includes('id="replay-section"'), 'Has replay section');
 assert(html.includes('id="mimic-select"'), 'Has replay/mimic select');
 assert(html.includes('id="btn-mimic"'), 'Has replay button');
+assert(html.includes('id="btn-import-captures"'), 'Has import captures button');
+assert(html.includes('id="capture-import-input"'), 'Has capture import file input');
+assert(html.includes('id="quick-reconnect-card"'), 'Has quick reconnect card');
+assert(html.includes('id="btn-quick-reconnect"'), 'Has quick reconnect button');
+assert(html.includes('id="quick-reconnect-name"'), 'Has quick reconnect device name');
 assert(html.includes('id="btn-flash-all-lights"'), 'Has flash all lights button');
 assert(html.includes('id="btn-off-all-lights"'), 'Has turn off all lights button');
 assert(html.includes('id="btn-set-color-all-lights"'), 'Has set color button');
@@ -141,8 +146,10 @@ assert(html.includes('personal testing'), 'Disclaimer mentions personal testing'
 const scriptOrder = [
   'js/logger.js',
   'js/browser-compat.js',
+  'js/call-history.js',
   'js/macros.js',
   'js/bluetooth-scanner.js',
+  'js/serial-bluetooth.js',
   'js/announcements.js',
   'js/audio-player.js',
   'js/vulnerability.js',
@@ -247,6 +254,13 @@ assert(appJs.includes('Best suggested test'), 'Shows best test suggestion from G
 
 // Capture/replay in devices tab
 assert(appJs.includes('renderCaptures'), 'Has renderCaptures function');
+assert(appJs.includes('capture-import-input'), 'Wires capture import');
+assert(appJs.includes('Announcements.importCapture'), 'Calls importCapture on import');
+assert(appJs.includes('loadFavorites'), 'Has loadFavorites for device pinning');
+assert(appJs.includes('toggleFavorite'), 'Has toggleFavorite for device pinning');
+assert(appJs.includes('saveLastConnected'), 'Has saveLastConnected for quick reconnect');
+assert(appJs.includes('updateQuickReconnectUI'), 'Has updateQuickReconnectUI');
+assert(appJs.includes('btn-pin'), 'Has pin button in device list');
 assert(appJs.includes('getDeviceNotes'), 'Has getDeviceNotes');
 assert(appJs.includes('setDeviceNotes'), 'Has setDeviceNotes');
 assert(appJs.includes('DEVICE_NOTES_KEY'), 'Uses device notes localStorage key');
@@ -439,6 +453,7 @@ assert(annJs.includes('normalizeUuid'), 'Normalizes UUIDs before matching during
 assert(annJs.includes('getCaptures'), 'Exposes getCaptures for capture list');
 assert(annJs.includes('clearCaptures'), 'Exposes clearCaptures');
 assert(annJs.includes('exportCapture'), 'Exposes exportCapture for JSON export');
+assert(annJs.includes('importCapture'), 'Exposes importCapture for JSON import');
 assert(annJs.includes('written, skipped, failed'), 'Replay returns written/skipped/failed counts');
 assert(annJs.includes('captureFromDevice'), 'Has captureFromDevice');
 assert(annJs.includes('captureFromDeviceId'), 'Has captureFromDeviceId with options');
