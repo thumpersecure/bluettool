@@ -21,6 +21,13 @@ const BluetoothScanner = (() => {
     '00002a24-0000-1000-8000-00805f9b34fb', // Model Number
   ]);
 
+  const COMMON_SERVICE_UUIDS = [
+    'generic_access', 'generic_attribute', 'device_information', 'battery_service',
+    'heart_rate', 'health_thermometer', 'tx_power', 'immediate_alert', 'link_loss',
+    'current_time', 'human_interface_device',
+    ...SMART_LIGHT_SERVICE_UUIDS,
+  ];
+
   /** Check Web Bluetooth support */
   function checkSupport() {
     const results = [];
@@ -175,8 +182,8 @@ const BluetoothScanner = (() => {
         Logger.warn(`Device disconnected: ${info.name}`);
         info.connected = false;
         info.server = null;
-        if (connectedDevice?.id === info.id) connectedDevice = null;
-        if (connectedServer && connectedServer?.device?.id === info.id) connectedServer = null;
+        if (connectedDevice && connectedDevice.id === info.id) connectedDevice = null;
+        if (connectedServer && connectedServer.device && connectedServer.device.id === info.id) connectedServer = null;
         updateStatus('offline', 'Disconnected');
         if (onConnectionChange) onConnectionChange(info, false, { source: 'device' });
       });
@@ -243,20 +250,7 @@ const BluetoothScanner = (() => {
   }
 
   function getCommonServiceUUIDs() {
-    return [
-      'generic_access',
-      'generic_attribute',
-      'device_information',
-      'battery_service',
-      'heart_rate',
-      'health_thermometer',
-      'tx_power',
-      'immediate_alert',
-      'link_loss',
-      'current_time',
-      'human_interface_device',
-      ...SMART_LIGHT_SERVICE_UUIDS,
-    ];
+    return COMMON_SERVICE_UUIDS;
   }
 
   /**
@@ -430,11 +424,11 @@ const BluetoothScanner = (() => {
    */
   async function writeCharacteristic(charInfo, hexString) {
     try {
-      if (!charInfo?.characteristic) {
+      if (!charInfo || !charInfo.characteristic) {
         throw new Error('Invalid characteristic');
       }
 
-      const gatt = charInfo?.characteristic?.service?.device?.gatt;
+      const gatt = charInfo.characteristic.service?.device?.gatt;
       if (!gatt || !gatt.connected) {
         throw new Error('Device disconnected');
       }
@@ -513,14 +507,25 @@ const BluetoothScanner = (() => {
   }
 
   function normalizeUuid(uuid) {
-    return String(uuid || '').toLowerCase();
+    const raw = String(uuid || '').toLowerCase().trim();
+    if (!raw) return '';
+    if (typeof BluetoothUUID !== 'undefined' && typeof BluetoothUUID.canonicalUUID === 'function') {
+      try {
+        return BluetoothUUID.canonicalUUID(raw);
+      } catch (_) { /* fall through */ }
+    }
+    if (/^[0-9a-f]{4}$/.test(raw)) {
+      return `0000${raw}-0000-1000-8000-00805f9b34fb`;
+    }
+    return raw;
   }
 
   function getTextCharacteristicValue(info, targetUuid) {
-    if (!info?.services?.length) return '';
+    if (!info || !info.services || info.services.length === 0) return '';
     const normalizedTarget = normalizeUuid(targetUuid);
     for (const svc of info.services) {
-      for (const ch of svc.characteristics || []) {
+      const chars = svc.characteristics || [];
+      for (const ch of chars) {
         if (normalizeUuid(ch.uuid) === normalizedTarget && typeof ch.textValue === 'string') {
           return ch.textValue.replace(/\0/g, '').trim();
         }
@@ -557,8 +562,8 @@ const BluetoothScanner = (() => {
   }
 
   function isWritableCharacteristic(charInfo) {
-    if (!charInfo?.properties) return false;
-    return charInfo.properties.includes('write') || charInfo.properties.includes('writeNoResp');
+    const props = charInfo?.properties;
+    return Array.isArray(props) && (props.includes('write') || props.includes('writeNoResp'));
   }
 
   function detectDeviceType(info) {
@@ -760,21 +765,20 @@ const BluetoothScanner = (() => {
     return names[normalized] || names[uuid] || uuid;
   }
 
+  let _statusIndicator = null;
+  let _statusText = null;
+  let _deviceCountEl = null;
   function updateStatus(state, text) {
-    const indicator = document.getElementById('bt-status-indicator');
-    const statusText = document.getElementById('bt-status-text');
-    if (indicator) {
-      indicator.className = `indicator ${state}`;
-    }
-    if (statusText) {
-      statusText.textContent = text;
-    }
+    if (!_statusIndicator) _statusIndicator = document.getElementById('bt-status-indicator');
+    if (!_statusText) _statusText = document.getElementById('bt-status-text');
+    if (_statusIndicator) _statusIndicator.className = `indicator ${state}`;
+    if (_statusText) _statusText.textContent = text;
   }
 
   function updateDeviceCount() {
-    const el = document.getElementById('device-count');
-    if (el) {
-      el.textContent = `${devices.size} device${devices.size !== 1 ? 's' : ''}`;
+    if (!_deviceCountEl) _deviceCountEl = document.getElementById('device-count');
+    if (_deviceCountEl) {
+      _deviceCountEl.textContent = `${devices.size} device${devices.size !== 1 ? 's' : ''}`;
     }
   }
 
@@ -861,6 +865,7 @@ const BluetoothScanner = (() => {
     setOnDeviceFound,
     setOnConnectionChange,
     dataViewToHex,
-    hexToBytes
+    hexToBytes,
+    normalizeUuid
   };
 })();

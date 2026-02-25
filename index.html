@@ -15,7 +15,12 @@
   <link rel="apple-touch-icon" sizes="167x167" href="icons/icon-192.svg">
   <link rel="manifest" href="manifest.json">
   <title>BlueTTool</title>
+  <link rel="preload" href="css/style.css" as="style">
   <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Critical: prevent white flash before CSS loads */
+    body{background:#0a0e27;color:#e8eaf6}
+  </style>
 </head>
 <body>
   <div id="app">
@@ -37,7 +42,8 @@
     <nav id="tab-bar" role="tablist" aria-label="Main navigation">
       <button id="tab-scanner" class="tab active" role="tab" aria-selected="true" aria-controls="scanner" data-tab="scanner">Scan</button>
       <button id="tab-devices" class="tab" role="tab" aria-selected="false" aria-controls="devices" data-tab="devices">Devices</button>
-      <button id="tab-audio" class="tab" role="tab" aria-selected="false" aria-controls="audio" data-tab="audio">Audio</button>
+      <button id="tab-tools" class="tab" role="tab" aria-selected="false" aria-controls="tools" data-tab="tools">Tools</button>
+      <button id="tab-replay" class="tab" role="tab" aria-selected="false" aria-controls="replay" data-tab="replay">Replay</button>
       <button id="tab-calls" class="tab" role="tab" aria-selected="false" aria-controls="calls" data-tab="calls">Calls</button>
       <button id="tab-advanced" class="tab" role="tab" aria-selected="false" aria-controls="advanced" data-tab="advanced">Agent</button>
       <button id="tab-log" class="tab" role="tab" aria-selected="false" aria-controls="log" data-tab="log">Log</button>
@@ -46,6 +52,11 @@
 
     <!-- Scanner Tab -->
     <section id="scanner" class="tab-content active" role="tabpanel" aria-labelledby="tab-scanner">
+      <div id="quick-reconnect-card" class="card quick-reconnect-card hidden">
+        <h2>Quick Reconnect</h2>
+        <p class="hint">Reconnect to your last used device.</p>
+        <button id="btn-quick-reconnect" class="btn btn-primary btn-large">Reconnect to <span id="quick-reconnect-name">Device</span></button>
+      </div>
       <div class="card">
         <h2>BLE Device Scanner</h2>
         <p class="hint">Scans for nearby BLE devices via Web Bluetooth in Bluefy. Tap to open device chooser.</p>
@@ -57,7 +68,7 @@
             Scan All (No Filter)
           </button>
         </div>
-        <div id="classic-bt-section" class="filter-section" style="margin-top:12px;">
+        <div id="classic-bt-section" class="filter-section filter-section-spaced">
           <h3>Classic Bluetooth (Chrome 117+)</h3>
           <p class="hint">Web Serial API connects to paired Bluetooth Classic devices (RFCOMM/SPP).</p>
           <div id="classic-bt-unavailable" class="classic-bt-unavailable hidden">
@@ -78,7 +89,7 @@
             <option value="15">15 seconds</option>
             <option value="30">30 seconds</option>
           </select>
-          <p class="hint" style="margin-top:4px;">Hint for how long to show device picker. Actual behavior depends on browser.</p>
+          <p class="hint hint-spaced">Hint for how long to show device picker. Actual behavior depends on browser.</p>
         </div>
         <div id="scan-filters" class="filter-section">
           <h3>Scan Filters</h3>
@@ -155,23 +166,6 @@
         </div>
       </div>
 
-      <!-- Captures Section -->
-      <div id="captures-section" class="card" style="display:none;">
-        <h2>Captured Profiles</h2>
-        <p class="hint">Snapshots of GATT characteristic data. Use Replay to write values back.</p>
-        <div id="captured-list"></div>
-        <div id="replay-section" style="display:none;">
-          <h3>Replay to Connected Device</h3>
-          <select id="mimic-select" class="input-field">
-            <option value="">Select captured profile...</option>
-          </select>
-          <button id="btn-mimic" class="btn btn-warning btn-large" disabled>
-            Replay Captured Data
-          </button>
-          <div id="mimic-status" class="mimic-status"></div>
-        </div>
-      </div>
-
       <!-- Device Detail Panel (slides in) -->
       <div id="device-detail" class="detail-panel hidden">
         <div class="detail-header">
@@ -182,11 +176,11 @@
       </div>
     </section>
 
-    <!-- Audio Tab -->
-    <section id="audio" class="tab-content" role="tabpanel" aria-labelledby="tab-audio">
+    <!-- Tools Tab -->
+    <section id="tools" class="tab-content" role="tabpanel" aria-labelledby="tab-tools">
       <div class="card">
-        <h2>Audio Test Tools</h2>
-        <p class="hint">Play DTMF/fax tones for Bluetooth audio testing. Stop audio or disconnect speakers.</p>
+        <h2>🔊 Sound</h2>
+        <p class="hint">DTMF/fax tones for Bluetooth audio testing. Adjust speed and volume.</p>
         <div class="audio-controls">
           <button id="btn-play-dtmf" class="btn btn-primary btn-large">
             Play DTMF Tones (Live)
@@ -203,10 +197,50 @@
           <input type="range" id="volume-slider" min="0" max="100" value="50" class="volume-slider">
           <span id="volume-value" class="volume-value">50%</span>
         </div>
+        <div class="speed-control">
+          <label class="volume-label">DTMF Speed</label>
+          <select id="dtmf-speed" class="input-field">
+            <option value="0.5">0.5x (Slow)</option>
+            <option value="1" selected>1x (Normal)</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2x (Fast)</option>
+          </select>
+        </div>
+        <div class="custom-dtmf-control">
+          <label class="volume-label">Custom DTMF Sequence</label>
+          <p class="hint hint-tight">Type digits 0-9, *, #, A-D (e.g. 123#*456)</p>
+          <div class="custom-dtmf-row">
+            <input type="text" id="dtmf-custom-input" class="input-field" placeholder="e.g. 123#*456" maxlength="64" inputmode="tel" autocomplete="off">
+            <button id="btn-play-custom-dtmf" class="btn btn-primary">Play</button>
+          </div>
+        </div>
       </div>
 
       <div class="card">
-        <h2>Stop Music / Silence Speakers</h2>
+        <h2>💡 Lights</h2>
+        <p class="hint">Control connected smart lights (Govee, etc.). Connect devices first in Devices tab.</p>
+        <div class="light-tools-actions">
+          <button id="btn-flash-all-lights" class="btn btn-warning btn-large">
+            Flash All Lights
+          </button>
+          <button id="btn-off-all-lights" class="btn btn-danger btn-large">
+            Turn Off All Lights
+          </button>
+        </div>
+        <div class="light-color-control">
+          <label class="volume-label">Set Color (RGB)</label>
+          <div class="color-picker-row">
+            <input type="color" id="light-color-picker" value="#ff0000" class="color-picker-input" title="Pick color">
+            <input type="text" id="light-color-hex" class="input-field input-max-100" value="#ff0000" placeholder="#RRGGBB" maxlength="7">
+          </div>
+          <button id="btn-set-color-all-lights" class="btn btn-primary btn-spaced">
+            Set Color on All Lights
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🔇 Silence</h2>
         <p class="hint">Disconnect BLE devices to silence connected Bluetooth speakers. Stops all audio from this app.</p>
         <button id="btn-silence-all" class="btn btn-danger btn-large">
           Silence All &mdash; Disconnect Devices
@@ -226,6 +260,52 @@
           <button id="btn-share-link" class="btn btn-secondary">
             Share App Link
           </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>⚡ Macros</h2>
+        <p class="hint">Automate sequences: flash lights, set color, replay capture, delays. Connect devices first, then run.</p>
+        <div id="macros-list" class="macros-list"></div>
+        <div class="macros-actions">
+          <button id="btn-add-macro" class="btn btn-primary">Add Macro</button>
+        </div>
+        <div id="macro-form" class="macro-form hidden">
+          <input type="text" id="macro-name-input" class="input-field" placeholder="Macro name (e.g. Quick Light Test)">
+          <div class="macro-steps-preview" id="macro-steps-preview"></div>
+          <div class="macro-form-buttons">
+            <button id="btn-save-macro" class="btn btn-primary">Save</button>
+            <button id="btn-cancel-macro" class="btn btn-secondary">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Replay Tab -->
+    <section id="replay" class="tab-content" role="tabpanel" aria-labelledby="tab-replay">
+      <div class="card">
+        <h2>Captured Profiles</h2>
+        <p class="hint">Snapshots of GATT characteristic data. Capture from Devices tab, or import from JSON. Replay to a connected device.</p>
+        <div class="replay-actions">
+          <input type="file" id="capture-import-input" accept=".json,application/json" class="input-file-hidden">
+          <button id="btn-import-captures" class="btn btn-secondary btn-small">Import JSON</button>
+        </div>
+        <div id="captured-list" class="captured-list-replay"></div>
+        <div id="replay-section" class="replay-section-main" style="display:none;">
+          <h3>Replay to Connected Device</h3>
+          <select id="mimic-select" class="input-field">
+            <option value="">Select captured profile...</option>
+          </select>
+          <button id="btn-mimic" class="btn btn-warning btn-large" disabled>
+            Replay Captured Data
+          </button>
+          <div id="mimic-status" class="mimic-status"></div>
+        </div>
+        <div class="empty-state" id="replay-empty-state">
+          <div class="empty-icon" aria-hidden="true">&#x1F4C1;</div>
+          <p>No captures yet</p>
+          <p class="empty-hint">Connect to a device in the Devices tab, open its detail panel, and tap <strong>Capture Profile Snapshot</strong>.</p>
+          <button type="button" class="empty-cta" id="empty-cta-devices" aria-label="Go to Devices tab">Go to Devices</button>
         </div>
       </div>
     </section>
@@ -343,7 +423,7 @@
               <input type="checkbox" id="setting-theme-dark" checked>
               <span>Dark theme</span>
             </label>
-            <p class="hint" style="margin-top:4px;">Toggle off for light theme.</p>
+            <p class="hint hint-spaced">Toggle off for light theme.</p>
           </div>
         </div>
 
@@ -357,7 +437,7 @@
               <input type="checkbox" id="setting-persist-volume" checked>
               <span>Persist volume level</span>
             </label>
-            <p class="hint" style="margin-top:4px;">Remember volume across sessions.</p>
+            <p class="hint hint-spaced">Remember volume across sessions.</p>
           </div>
         </div>
 
@@ -377,7 +457,7 @@
               <option value="15">15</option>
               <option value="30">30</option>
             </select>
-            <p class="hint" style="margin-top:4px;">Hint for scan timeout. Browser may ignore.</p>
+            <p class="hint hint-spaced">Hint for scan timeout. Browser may ignore.</p>
           </div>
         </div>
 
@@ -396,7 +476,7 @@
               <option value="name-asc">Name A–Z</option>
               <option value="name-desc">Name Z–A</option>
             </select>
-            <label class="toggle-label" style="margin-top:10px;">
+            <label class="toggle-label settings-label-spaced">
               <span>Default filter</span>
             </label>
             <select id="setting-default-filter" class="input-field">
@@ -428,9 +508,9 @@
     </section>
 
     <!-- Audio Overlay -->
-    <div id="audio-overlay" class="overlay hidden">
+    <div id="audio-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="audio-overlay-title" aria-hidden="true">
       <div class="overlay-content">
-        <h2>DTMF Test Tones</h2>
+        <h2 id="audio-overlay-title">DTMF Test Tones</h2>
         <p id="audio-overlay-message">Playing fax/DTMF tone sequence...</p>
         <div class="audio-visualizer" id="audio-visualizer">
           <div class="viz-bar"></div><div class="viz-bar"></div><div class="viz-bar"></div>
@@ -442,7 +522,7 @@
     </div>
 
     <!-- Confirm Dialog -->
-    <div id="confirm-dialog" class="overlay hidden">
+    <div id="confirm-dialog" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-hidden="true">
       <div class="overlay-content">
         <h2 id="confirm-title">Confirm</h2>
         <p id="confirm-message"></p>
@@ -457,6 +537,7 @@
   <script src="js/logger.js"></script>
   <script src="js/browser-compat.js"></script>
   <script src="js/call-history.js"></script>
+  <script src="js/macros.js"></script>
   <script src="js/bluetooth-scanner.js"></script>
   <script src="js/serial-bluetooth.js"></script>
   <script src="js/announcements.js"></script>

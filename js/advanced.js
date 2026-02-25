@@ -106,14 +106,13 @@ const Advanced = (() => {
   }
 
   function isRunning() {
-    if (agents.size > 0) {
-      for (const agent of agents.values()) {
-        if (agent.running) return true;
-      }
+    if (currentState !== AGENT_STATES.IDLE &&
+        currentState !== AGENT_STATES.COMPLETE &&
+        currentState !== AGENT_STATES.ERROR) return true;
+    for (const agent of agents.values()) {
+      if (agent.running) return true;
     }
-    return currentState !== AGENT_STATES.IDLE &&
-           currentState !== AGENT_STATES.COMPLETE &&
-           currentState !== AGENT_STATES.ERROR;
+    return false;
   }
 
   function getState() {
@@ -312,7 +311,7 @@ const Advanced = (() => {
 
       emitAgent(agent, AGENT_STATES.ENUMERATING, 'Enumerating GATT services and characteristics...');
 
-      const updatedInfo = BluetoothScanner.getDevices().find(d => d.id === deviceInfo.id);
+      const updatedInfo = BluetoothScanner.getDevice(deviceInfo.id);
       if (updatedInfo) {
         results.servicesFound = updatedInfo.services.length;
         for (const svc of updatedInfo.services) {
@@ -344,9 +343,8 @@ const Advanced = (() => {
           return profile;
         })(),
         (async () => {
-          const freshInfo = BluetoothScanner.getDevices().find(d => d.id === deviceInfo.id);
-          if (freshInfo) return Vulnerability.assessDevice(freshInfo);
-          return null;
+          const freshInfo = BluetoothScanner.getDevice(deviceInfo.id);
+          return freshInfo ? Vulnerability.assessDevice(freshInfo) : null;
         })()
       ]);
 
@@ -633,7 +631,7 @@ const Advanced = (() => {
 
       emit(AGENT_STATES.ENUMERATING, 'Enumerating GATT services and characteristics...');
 
-      const updatedInfo = BluetoothScanner.getDevices().find(d => d.id === deviceInfo.id);
+      const updatedInfo = BluetoothScanner.getDevice(deviceInfo.id);
       if (updatedInfo) {
         results.servicesFound = updatedInfo.services.length;
         for (const svc of updatedInfo.services) {

@@ -40,6 +40,8 @@
   - [🔗 Classic Bluetooth](#-classic-bluetooth-chrome-117)
   - [📱 Devices](#-devices)
   - [📞 Call History](#-call-history)
+  - [🛠️ Tools Tab](#️-tools-tab)
+  - [📼 Replay Tab](#-replay-tab)
   - [🔊 Audio Test Tools](#-audio-test-tools)
   - [📤 Share via AirDrop](#-share-via-airdrop)
   - [🤖 Agentic Auto-Discovery](#-agentic-auto-discovery-advanced)
@@ -145,6 +147,25 @@ The app will open like a native app from your home screen. The in-app Scanner ta
 | 📋 **Formats** | `date,number,duration,type` (CSV) or JSON array |
 | 📱 **iPhone Data** | Use a call history backup app, then import the exported file |
 
+### 🛠️ Tools Tab
+
+The **Tools** tab groups audio, lights, silence, and sharing controls:
+
+| Section | Description |
+|---------|-------------|
+| 🔊 **Sound** | DTMF/fax tones, play file, stop audio — see [Audio Test Tools](#-audio-test-tools) |
+| 💡 **Lights** | Flash, turn off, or set color on connected smart lights (Govee, etc.) |
+| 🔇 **Silence** | Stop all audio and disconnect BLE devices (silence Bluetooth speakers) |
+| 📤 **Share** | AirDrop/share via iOS share sheet — see [Share via AirDrop](#-share-via-airdrop) |
+
+### 📼 Replay Tab
+
+| Capability | Description |
+|------------|-------------|
+| 📋 **Captured Profiles** | List of GATT snapshots captured from the Devices tab detail panel |
+| ▶️ **Replay** | Replay captured characteristic data to a connected device (with safety checks) |
+| 📭 **Empty State** | Prompts to capture from Devices tab when no captures exist |
+
 ### 🔊 Audio Test Tools
 
 | Tool | Description |
@@ -153,6 +174,16 @@ The app will open like a native app from your home screen. The in-app Scanner ta
 | 📁 **Play Audio File** | Plays included WAV file of fax machine / DTMF tones (falls back to live DTMF if missing) |
 | ⏹️ **Stop All Audio** | Instantly stops any playing audio |
 | 🔇 **Silence All** | Stops audio AND disconnects all BLE devices (silences Bluetooth speakers) |
+
+### 💡 Smart Lights (Tools)
+
+| Tool | Description |
+|------|-------------|
+| ⚡ **Flash All Lights** | Flash all connected smart lights (Govee, etc.) |
+| 🔴 **Turn Off All Lights** | Turn off all connected smart lights |
+| 🎨 **Set Color on All Lights** | Set RGB color on all connected color-capable lights |
+
+Connect devices in the Devices tab first. Per-device Flash/Color/Off controls appear in the device list and detail panel for compatible lights.
 
 ### 📤 Share via AirDrop
 
@@ -178,6 +209,8 @@ Scan → Connect → Enumerate → Read (parallel) → Capture → Analyze
 6. **Analyze** — Report findings, surface areas, and recommendations
 
 Real-time status feed shows each step as it executes.
+
+**Parallel Multi-Device Discovery** — Analyze all discovered devices simultaneously. Run a BLE scan first, then tap "Run Parallel Discovery" to connect, enumerate, and assess each device concurrently. Aggregate results and vulnerability reports are shown when complete.
 
 <details>
 <summary><strong>📊 Architecture Diagram</strong> (click to expand)</summary>
@@ -222,7 +255,7 @@ flowchart TB
 ┌─────────────────────────────────────┐
 │  🔵 BlueTTool          [≡] [···]   │
 ├─────────────────────────────────────┤
-│  Scanner │ Devices │ Call │ Audio   │
+│  Scan │ Devices │ Tools │ Replay │ Calls │ Agent │ Log │ Settings │
 ├─────────────────────────────────────┤
 │                                     │
 │  📡 BLE Scan                        │
@@ -342,7 +375,8 @@ flowchart LR
     subgraph Tabs["App Tabs"]
         S[Scanner]
         D[Devices]
-        A[Audio + Share]
+        T[Tools]
+        R[Replay]
         C[Call History]
         Ag[Agent]
         L[Log]
@@ -351,7 +385,8 @@ flowchart LR
     
     S --> D
     D --> S
-    A --> A
+    T --> T
+    R --> D
     C --> C
     Ag --> D
     L --> L

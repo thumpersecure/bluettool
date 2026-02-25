@@ -8,6 +8,14 @@
  * the native share sheet which includes AirDrop.
  */
 const Sharing = (() => {
+  function handleShareError(err) {
+    if (err.name === 'AbortError') {
+      Logger.info('Share cancelled by user');
+    } else {
+      Logger.error('Share failed: ' + err.message);
+    }
+  }
+
   /**
    * Check if Web Share API with file support is available.
    */
@@ -41,11 +49,7 @@ const Sharing = (() => {
         return false;
       }
     } catch (err) {
-      if (err.name === 'AbortError') {
-        Logger.info('Share cancelled by user');
-      } else {
-        Logger.error('Share failed: ' + err.message);
-      }
+      handleShareError(err);
       return false;
     }
   }
@@ -68,11 +72,7 @@ const Sharing = (() => {
         return false;
       }
     } catch (err) {
-      if (err.name === 'AbortError') {
-        Logger.info('Share cancelled');
-      } else {
-        Logger.error('Share failed: ' + err.message);
-      }
+      handleShareError(err);
       return false;
     }
   }
@@ -104,11 +104,7 @@ const Sharing = (() => {
         return false;
       }
     } catch (err) {
-      if (err.name === 'AbortError') {
-        Logger.info('Share cancelled');
-      } else {
-        Logger.error('Share failed: ' + err.message);
-      }
+      handleShareError(err);
       return false;
     }
   }
