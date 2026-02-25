@@ -8,6 +8,12 @@ const BluetoothScanner = (() => {
   let connectedServer = null;
   let onDeviceFound = null;
   let onConnectionChange = null;
+  const SMART_LIGHT_SERVICE_UUIDS = [
+    '0000ffd5-0000-1000-8000-00805f9b34fb', // Common Govee control service
+    '0000ffe0-0000-1000-8000-00805f9b34fb', // Common BLE UART/light service
+    '0000ffb0-0000-1000-8000-00805f9b34fb', // Common smart-light custom range
+    '00001300-0000-1000-8000-00805f9b34fb'  // Bluetooth Mesh Lighting service
+  ];
 
   /** Check Web Bluetooth support */
   function checkSupport() {
@@ -117,13 +123,17 @@ const BluetoothScanner = (() => {
 
       const info = {
         id: device.id,
-        name: device.name || 'Unknown Device',
+        name: (device.name || '').trim() || 'Unknown Device',
         device: device,
         discovered: new Date().toISOString(),
         connected: false,
         services: [],
         characteristics: [],
-        rssi: null
+        rssi: null,
+        manufacturer: null,
+        model: null,
+        deviceType: 'unknown',
+        lightTestPlan: null
       };
 
       devices.set(device.id, info);
@@ -204,6 +214,7 @@ const BluetoothScanner = (() => {
       'link_loss',
       'current_time',
       'human_interface_device',
+      ...SMART_LIGHT_SERVICE_UUIDS,
     ];
   }
 
@@ -221,6 +232,9 @@ const BluetoothScanner = (() => {
     updateStatus('scanning', 'Connecting...');
 
     try {
+      if (!info.device.gatt) {
+        throw new Error('Device GATT server unavailable — try scanning again');
+      }
       const server = await info.device.gatt.connect();
       connectedDevice = info;
       connectedServer = server;
@@ -251,7 +265,7 @@ const BluetoothScanner = (() => {
     if (!info) return;
 
     try {
-      if (info.device.gatt.connected) {
+      if (info.device.gatt?.connected) {
         Logger.info(`Disconnecting from ${info.name}...`);
         info.device.gatt.disconnect();
       }
@@ -274,6 +288,8 @@ const BluetoothScanner = (() => {
     Logger.info('Enumerating GATT services...');
     info.services = [];
     info.characteristics = [];
+    info.lightTestPlan = null;
+    info.deviceType = 'unknown';
 
     try {
       const services = await server.getPrimaryServices();
@@ -328,9 +344,15 @@ const BluetoothScanner = (() => {
         Logger.success(`Service: ${svcInfo.name} (${svcInfo.characteristics.length} chars)`);
       }
 
+      hydrateDeviceIdentity(info);
+      info.deviceType = detectDeviceType(info);
+      info.lightTestPlan = buildLightTestPlan(info);
+
       Logger.info('Service enumeration complete', {
         services: info.services.length,
-        characteristics: info.characteristics.length
+        characteristics: info.characteristics.length,
+        deviceType: info.deviceType,
+        suggestedTest: info.lightTestPlan?.bestAction || 'none'
       });
 
     } catch (err) {
@@ -359,6 +381,19 @@ const BluetoothScanner = (() => {
    */
   async function writeCharacteristic(charInfo, hexString) {
     try {
+      if (!charInfo?.characteristic) {
+        throw new Error('Invalid characteristic');
+      }
+
+      const gatt = charInfo?.characteristic?.service?.device?.gatt;
+      if (!gatt || !gatt.connected) {
+        throw new Error('Device disconnected');
+      }
+
+      if (typeof hexString !== 'string' || !hexString.trim()) {
+        throw new Error('Hex payload required');
+      }
+
       const bytes = hexToBytes(hexString);
       const buffer = new Uint8Array(bytes).buffer;
 
@@ -409,7 +444,8 @@ const BluetoothScanner = (() => {
   function dataViewToString(dataView) {
     const decoder = new TextDecoder('utf-8');
     try {
-      return decoder.decode(dataView.buffer);
+      const data = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
+      return decoder.decode(data);
     } catch {
       return '';
     }
@@ -417,11 +453,213 @@ const BluetoothScanner = (() => {
 
   function hexToBytes(hex) {
     const clean = hex.replace(/[:\s]/g, '');
+    if (!clean || clean.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(clean)) {
+      throw new Error('Invalid hex payload');
+    }
     const bytes = [];
     for (let i = 0; i < clean.length; i += 2) {
       bytes.push(parseInt(clean.substring(i, i + 2), 16));
     }
     return bytes;
+  }
+
+  function normalizeUuid(uuid) {
+    return String(uuid || '').toLowerCase();
+  }
+
+  function getTextCharacteristicValue(info, targetUuid) {
+    if (!info?.services?.length) return '';
+    const normalizedTarget = normalizeUuid(targetUuid);
+    for (const svc of info.services) {
+      for (const ch of svc.characteristics || []) {
+        if (normalizeUuid(ch.uuid) === normalizedTarget && typeof ch.textValue === 'string') {
+          return ch.textValue.replace(/\0/g, '').trim();
+        }
+      }
+    }
+    return '';
+  }
+
+  function isPlaceholderName(name) {
+    const normalized = String(name || '').trim().toLowerCase();
+    return normalized.length === 0 || normalized === 'unknown device' || normalized === 'unnamed';
+  }
+
+  function hydrateDeviceIdentity(info) {
+    const gattName = getTextCharacteristicValue(info, '00002a00-0000-1000-8000-00805f9b34fb');
+    const manufacturer = getTextCharacteristicValue(info, '00002a29-0000-1000-8000-00805f9b34fb');
+    const model = getTextCharacteristicValue(info, '00002a24-0000-1000-8000-00805f9b34fb');
+
+    if (manufacturer) info.manufacturer = manufacturer;
+    if (model) info.model = model;
+
+    if (isPlaceholderName(info.name) && gattName) {
+      info.name = gattName;
+      Logger.info(`Using GATT Device Name for ${info.id}: ${info.name}`);
+    }
+
+    if (isPlaceholderName(info.name)) {
+      const inferred = [manufacturer, model].filter(Boolean).join(' ').trim();
+      if (inferred) {
+        info.name = inferred;
+        Logger.info(`Using inferred device name for ${info.id}: ${info.name}`);
+      }
+    }
+  }
+
+  function isWritableCharacteristic(charInfo) {
+    if (!charInfo?.properties) return false;
+    return charInfo.properties.includes('write') || charInfo.properties.includes('writeNoResp');
+  }
+
+  function detectDeviceType(info) {
+    const name = String(info?.name || '').toLowerCase();
+    const manufacturer = String(info?.manufacturer || '').toLowerCase();
+    const serviceUuids = (info?.services || []).map(s => normalizeUuid(s.uuid));
+
+    if (serviceUuids.some(uuid => uuid.includes('ffd5')) || name.includes('govee') || manufacturer.includes('govee')) {
+      return 'govee_light';
+    }
+
+    if (
+      serviceUuids.some(uuid => SMART_LIGHT_SERVICE_UUIDS.includes(uuid) || /0000ff[0-9a-f]{2}-0000-1000-8000-00805f9b34fb/.test(uuid)) ||
+      /(led|light|bulb|lamp|rgb)/.test(name) ||
+      /(led|light|bulb|lamp|rgb)/.test(manufacturer)
+    ) {
+      return 'smart_light';
+    }
+
+    return 'unknown';
+  }
+
+  function findBestWritableLightCharacteristic(info) {
+    const writableChars = (info?.characteristics || []).filter(isWritableCharacteristic);
+    if (writableChars.length === 0) return null;
+
+    const preferredUuids = [
+      '00002a06-0000-1000-8000-00805f9b34fb', // Alert Level
+      '00002b00-0000-1000-8000-00805f9b34fb', // Light Lightness Actual
+      '0000ffd9-0000-1000-8000-00805f9b34fb', // Common Govee command characteristic
+      '0000ffe1-0000-1000-8000-00805f9b34fb'
+    ];
+
+    for (const uuid of preferredUuids) {
+      const exact = writableChars.find(ch => normalizeUuid(ch.uuid) === uuid);
+      if (exact) return exact;
+    }
+
+    for (const svc of info.services || []) {
+      if (!isLikelyLightService(svc.uuid)) continue;
+      const svcWritable = (svc.characteristics || []).find(isWritableCharacteristic);
+      if (svcWritable) return svcWritable;
+    }
+
+    const byName = writableChars.find(ch => /(light|led|rgb|color|power|control)/i.test(String(ch.name || '')));
+    if (byName) return byName;
+
+    return writableChars[0];
+  }
+
+  function isLikelyLightService(uuid) {
+    const normalized = normalizeUuid(uuid);
+    return SMART_LIGHT_SERVICE_UUIDS.includes(normalized) ||
+      /0000ff[0-9a-f]{2}-0000-1000-8000-00805f9b34fb/.test(normalized);
+  }
+
+  function inferPayloadLength(charInfo) {
+    if (!charInfo?.value || typeof charInfo.value !== 'string') return 1;
+    const compact = charInfo.value.replace(/[:\s]/g, '');
+    if (!compact || compact.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(compact)) return 1;
+    const byteLength = compact.length / 2;
+    return Math.max(1, Math.min(byteLength, 8));
+  }
+
+  function buildHexPayload(length, seed) {
+    const payloadLength = Math.max(1, Math.min(length || 1, 8));
+    const seedBytes = Array.isArray(seed) && seed.length > 0 ? seed : [0x00];
+    const bytes = [];
+    for (let i = 0; i < payloadLength; i++) {
+      bytes.push(seedBytes[i % seedBytes.length] & 0xff);
+    }
+    return bytes.map(b => b.toString(16).padStart(2, '0')).join(':');
+  }
+
+  function buildLightTestPlan(info) {
+    const targetChar = findBestWritableLightCharacteristic(info);
+    if (!targetChar) return null;
+
+    const targetUuid = normalizeUuid(targetChar.uuid);
+    const targetServiceUuid = normalizeUuid(targetChar?.characteristic?.service?.uuid);
+    const likelyLightDevice = info?.deviceType === 'govee_light' || info?.deviceType === 'smart_light';
+    const lightContext =
+      likelyLightDevice ||
+      isLikelyLightService(targetServiceUuid) ||
+      /(light|led|rgb|color|bulb|lamp)/i.test(`${info?.name || ''} ${targetChar?.name || ''}`);
+
+    if (!lightContext && targetUuid !== '00002a06-0000-1000-8000-00805f9b34fb') {
+      return null;
+    }
+
+    if (targetUuid === '00002a06-0000-1000-8000-00805f9b34fb') {
+      return {
+        available: true,
+        targetCharUuid: targetChar.uuid,
+        targetCharName: targetChar.name,
+        bestAction: 'flash',
+        bestActionLabel: 'Flash',
+        reason: 'Immediate Alert characteristic detected — standardized alert test values available.',
+        confidence: 'high',
+        actions: {
+          flash: {
+            label: 'Flash',
+            steps: ['02', '00', '02', '00'],
+            delayMs: 180
+          },
+          off: {
+            label: 'Off',
+            steps: ['00'],
+            delayMs: 0
+          }
+        }
+      };
+    }
+
+    const payloadLength = inferPayloadLength(targetChar);
+    const offHex = buildHexPayload(payloadLength, [0x00]);
+    const fullHex = buildHexPayload(payloadLength, [0xff]);
+    const redHex = buildHexPayload(payloadLength, [0xff, 0x00, 0x00]);
+    const supportsColor = payloadLength >= 3 || /(rgb|color)/i.test(String(targetChar.name || ''));
+
+    const actions = {
+      flash: {
+        label: 'Flash',
+        steps: [fullHex, offHex, fullHex, offHex],
+        delayMs: 180
+      },
+      off: {
+        label: 'Off',
+        steps: [offHex],
+        delayMs: 0
+      }
+    };
+    if (supportsColor) {
+      actions.color = {
+        label: 'Color',
+        steps: [redHex],
+        delayMs: 0
+      };
+    }
+
+    return {
+      available: true,
+      targetCharUuid: targetChar.uuid,
+      targetCharName: targetChar.name,
+      bestAction: supportsColor ? 'color' : 'flash',
+      bestActionLabel: supportsColor ? 'Color' : 'Flash',
+      reason: `Using writable characteristic ${targetChar.name} (${targetChar.uuid}).`,
+      confidence: 'medium',
+      actions
+    };
   }
 
   function resolveServiceName(uuid) {
@@ -443,13 +681,19 @@ const BluetoothScanner = (() => {
       '0000180f-0000-1000-8000-00805f9b34fb': 'Battery Service',
       '0000180d-0000-1000-8000-00805f9b34fb': 'Heart Rate',
       '00001809-0000-1000-8000-00805f9b34fb': 'Health Thermometer',
+      '0000ffd5-0000-1000-8000-00805f9b34fb': 'Smart Light Control (Govee-like)',
+      '0000ffe0-0000-1000-8000-00805f9b34fb': 'Smart Light UART',
+      '0000ffb0-0000-1000-8000-00805f9b34fb': 'Smart Light Vendor Service',
+      '00001300-0000-1000-8000-00805f9b34fb': 'Mesh Lighting',
     };
-    return names[uuid] || uuid;
+    const normalized = normalizeUuid(uuid);
+    return names[normalized] || names[uuid] || uuid;
   }
 
   function resolveCharacteristicName(uuid) {
     const names = {
       '00002a00-0000-1000-8000-00805f9b34fb': 'Device Name',
+      '00002a06-0000-1000-8000-00805f9b34fb': 'Alert Level',
       '00002a01-0000-1000-8000-00805f9b34fb': 'Appearance',
       '00002a04-0000-1000-8000-00805f9b34fb': 'Peripheral Params',
       '00002a19-0000-1000-8000-00805f9b34fb': 'Battery Level',
@@ -461,8 +705,12 @@ const BluetoothScanner = (() => {
       '00002a29-0000-1000-8000-00805f9b34fb': 'Manufacturer Name',
       '00002a37-0000-1000-8000-00805f9b34fb': 'Heart Rate Measurement',
       '00002a38-0000-1000-8000-00805f9b34fb': 'Body Sensor Location',
+      '00002b00-0000-1000-8000-00805f9b34fb': 'Light Lightness Actual',
+      '0000ffd9-0000-1000-8000-00805f9b34fb': 'Vendor Light Command',
+      '0000ffe1-0000-1000-8000-00805f9b34fb': 'Vendor UART RX/TX',
     };
-    return names[uuid] || uuid;
+    const normalized = normalizeUuid(uuid);
+    return names[normalized] || names[uuid] || uuid;
   }
 
   function updateStatus(state, text) {
@@ -498,7 +746,7 @@ const BluetoothScanner = (() => {
   function clearDevices() {
     // Disconnect any connected device first
     for (const [id, info] of devices) {
-      if (info.connected && info.device.gatt.connected) {
+      if (info.connected && info.device.gatt?.connected) {
         info.device.gatt.disconnect();
       }
     }

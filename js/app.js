@@ -16,6 +16,94 @@ document.addEventListener('DOMContentLoaded', () => {
     return /^[\x20-\x7E]+$/.test(str);
   }
 
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function normalizeUuid(uuid) {
+    return String(uuid || '').toLowerCase();
+  }
+
+  function shortDeviceId(id) {
+    return String(id || '').slice(0, 8);
+  }
+
+  function isPlaceholderName(name) {
+    const normalized = String(name || '').trim().toLowerCase();
+    return normalized.length === 0 || normalized === 'unknown device' || normalized === 'unnamed';
+  }
+
+  function getDisplayName(dev) {
+    const raw = String(dev?.name || '').trim();
+    if (!isPlaceholderName(raw)) return raw;
+    const inferred = [dev?.manufacturer, dev?.model].filter(Boolean).join(' ').trim();
+    if (inferred) return inferred;
+    return `Device ${shortDeviceId(dev?.id)}`;
+  }
+
+  function getDeviceTypeLabel(dev) {
+    if (dev?.deviceType === 'govee_light') return 'Govee Light';
+    if (dev?.deviceType === 'smart_light') return 'Smart Light';
+    return '';
+  }
+
+  function isValidServiceFilter(value) {
+    return /^[a-z_]+$/i.test(value) ||
+      /^[0-9a-fA-F]{4}$/.test(value) ||
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
+  }
+
+  function isValidHexInput(value) {
+    const clean = String(value || '').replace(/[:\s]/g, '');
+    return clean.length > 0 && clean.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(clean);
+  }
+
+  async function runLightTestAction(deviceId, action, buttonEl) {
+    const devices = BluetoothScanner.getDevices();
+    const dev = devices.find(d => d.id === deviceId);
+    if (!dev || !dev.connected) {
+      showToast('Connect to this device before running light tests', 'error');
+      return;
+    }
+    const plan = dev.lightTestPlan;
+    const actionSpec = plan?.actions?.[action];
+    if (!plan?.available || !actionSpec) {
+      showToast('No compatible test command found from GATT profile', 'error');
+      return;
+    }
+
+    const targetChar = dev.characteristics.find(ch =>
+      normalizeUuid(ch.uuid) === normalizeUuid(plan.targetCharUuid)
+    );
+    if (!targetChar) {
+      showToast('Suggested test characteristic is no longer available', 'error');
+      return;
+    }
+
+    const defaultLabel = buttonEl ? buttonEl.textContent : '';
+    if (buttonEl) {
+      buttonEl.disabled = true;
+      buttonEl.textContent = 'Sending...';
+    }
+
+    try {
+      for (let i = 0; i < actionSpec.steps.length; i++) {
+        await BluetoothScanner.writeCharacteristic(targetChar, actionSpec.steps[i]);
+        if (i < actionSpec.steps.length - 1 && actionSpec.delayMs > 0) {
+          await sleep(actionSpec.delayMs);
+        }
+      }
+      showToast(`${actionSpec.label || action} test sent`, 'success');
+    } catch (err) {
+      showToast(`Test failed: ${err?.message || 'write error'}`, 'error');
+    } finally {
+      if (buttonEl) {
+        buttonEl.disabled = false;
+        buttonEl.textContent = defaultLabel;
+      }
+    }
+  }
+
   // --- Toast Notifications ---
   function showToast(message, type) {
     const container = document.getElementById('toast-container');
@@ -139,6 +227,10 @@ document.addEventListener('DOMContentLoaded', () => {
       options.namePrefix = nameValue;
     }
     if (svcFilterEnabled && svcValue) {
+      if (!isValidServiceFilter(svcValue)) {
+        showToast('Invalid service filter. Use a named UUID (heart_rate), 16-bit, or full 128-bit UUID.', 'error');
+        return;
+      }
       options.services = [svcValue];
     }
 
@@ -178,12 +270,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   BluetoothScanner.setOnConnectionChange((info, connected) => {
     renderDeviceList();
+    const displayName = getDisplayName(info);
     if (connected) {
       showAudioOverlay();
       AudioPlayer.triggerOnConnect();
-      showToast(`Connected to ${info.name}`, 'success');
+      showToast(`Connected to ${displayName}`, 'success');
     } else {
-      showToast(`Disconnected from ${info.name}`, 'info');
+      showToast(`Disconnected from ${displayName}`, 'info');
     }
   });
 
@@ -221,10 +314,15 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    list.innerHTML = devices.map(dev => `
+    list.innerHTML = devices.map(dev => {
+      const displayName = getDisplayName(dev);
+      const deviceTypeLabel = getDeviceTypeLabel(dev);
+      const plan = dev.lightTestPlan;
+      const hasLightPlan = !!(plan?.available);
+      return `
       <div class="device-item" data-device-id="${escapeHtml(dev.id)}">
         <div class="device-item-header">
-          <span class="device-name">${escapeHtml(dev.name)}</span>
+          <span class="device-name">${escapeHtml(displayName)}</span>
           ${dev.connected ? '<span class="conn-badge">Connected</span>' : ''}
         </div>
         <div class="device-id-row">
@@ -233,21 +331,29 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="device-meta">
           ${dev.connected ? '<span class="device-tag tag-connected">GATT</span>' : ''}
+          ${deviceTypeLabel ? `<span class="device-tag tag-light">${escapeHtml(deviceTypeLabel)}</span>` : ''}
+          ${hasLightPlan ? `<span class="device-tag tag-best-test">Best: ${escapeHtml(plan.bestActionLabel || plan.bestAction)}</span>` : ''}
           ${dev.services.length > 0 ? `<span class="device-tag tag-service">${dev.services.length} svc</span>` : ''}
           ${dev.characteristics.length > 0 ? `<span class="device-tag tag-char">${dev.characteristics.length} char</span>` : ''}
           <span class="device-tag tag-time">${new Date(dev.discovered).toLocaleTimeString()}</span>
         </div>
+        ${dev.connected && hasLightPlan ? `<div class="device-quick-actions">
+          <button class="btn btn-warning btn-small btn-light-test" data-action="flash" data-device-id="${escapeHtml(dev.id)}" ${plan.actions?.flash ? '' : 'disabled'}>Flash</button>
+          <button class="btn btn-primary btn-small btn-light-test" data-action="color" data-device-id="${escapeHtml(dev.id)}" ${plan.actions?.color ? '' : 'disabled'}>Color</button>
+          <button class="btn btn-danger btn-small btn-light-test" data-action="off" data-device-id="${escapeHtml(dev.id)}" ${plan.actions?.off ? '' : 'disabled'}>Off</button>
+        </div>` : ''}
         ${!dev.connected ? `<div class="device-quick-actions">
           <button class="btn btn-secondary btn-small btn-reconnect" data-device-id="${escapeHtml(dev.id)}">Reconnect</button>
         </div>` : ''}
       </div>
-    `).join('');
+    `;
+    }).join('');
 
     // Click on device item -> detail
     list.querySelectorAll('.device-item').forEach(item => {
       item.addEventListener('click', (e) => {
         // Don't open detail if clicking a button
-        if (e.target.closest('.btn-reconnect')) return;
+        if (e.target.closest('.device-quick-actions .btn')) return;
         showDeviceDetail(item.dataset.deviceId);
       });
     });
@@ -269,6 +375,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    list.querySelectorAll('.btn-light-test').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await runLightTestAction(btn.dataset.deviceId, btn.dataset.action, btn);
+      });
+    });
+
     // Update captures section
     renderCaptures();
   }
@@ -283,19 +396,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const nameEl = document.getElementById('detail-device-name');
     const content = document.getElementById('detail-content');
 
-    nameEl.textContent = dev.name;
+    const displayName = getDisplayName(dev);
+    const deviceTypeLabel = getDeviceTypeLabel(dev);
+    const lightPlan = dev.lightTestPlan;
+    nameEl.textContent = displayName;
 
     let html = `
       <div class="detail-section">
         <h3>Device Info</h3>
         <div class="detail-row">
           <span class="detail-label">Name</span>
-          <span class="detail-value">${escapeHtml(dev.name)}</span>
+          <span class="detail-value">${escapeHtml(displayName)}</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">Device ID</span>
           <span class="detail-value detail-value-mono">${escapeHtml(dev.id)}</span>
         </div>
+        ${dev.manufacturer ? `
+        <div class="detail-row">
+          <span class="detail-label">Manufacturer</span>
+          <span class="detail-value">${escapeHtml(dev.manufacturer)}</span>
+        </div>` : ''}
+        ${dev.model ? `
+        <div class="detail-row">
+          <span class="detail-label">Model</span>
+          <span class="detail-value">${escapeHtml(dev.model)}</span>
+        </div>` : ''}
+        ${deviceTypeLabel ? `
+        <div class="detail-row">
+          <span class="detail-label">Type</span>
+          <span class="detail-value">${escapeHtml(deviceTypeLabel)}</span>
+        </div>` : ''}
         <div class="detail-row">
           <span class="detail-label">Status</span>
           <span class="detail-value ${dev.connected ? 'val-connected' : 'val-disconnected'}">
@@ -316,6 +447,32 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       </div>
     `;
+
+    if (lightPlan?.available) {
+      html += `
+      <div class="detail-section light-test-section">
+        <h3>Smart Light Test Commands</h3>
+        <div class="detail-row">
+          <span class="detail-label">Best suggested test</span>
+          <span class="detail-value">${escapeHtml(lightPlan.bestActionLabel || lightPlan.bestAction || 'N/A')}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Reason</span>
+          <span class="detail-value">${escapeHtml(lightPlan.reason || 'Writable light-control characteristic detected')}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Target characteristic</span>
+          <span class="detail-value detail-value-mono">${escapeHtml(lightPlan.targetCharUuid || '')}</span>
+        </div>
+        <div class="light-test-actions">
+          <button class="btn btn-warning btn-small btn-detail-light-test" data-action="flash" data-device-id="${escapeHtml(dev.id)}" ${dev.connected && lightPlan.actions?.flash ? '' : 'disabled'}>Flash</button>
+          <button class="btn btn-primary btn-small btn-detail-light-test" data-action="color" data-device-id="${escapeHtml(dev.id)}" ${dev.connected && lightPlan.actions?.color ? '' : 'disabled'}>Color</button>
+          <button class="btn btn-danger btn-small btn-detail-light-test" data-action="off" data-device-id="${escapeHtml(dev.id)}" ${dev.connected && lightPlan.actions?.off ? '' : 'disabled'}>Off</button>
+        </div>
+        <p class="hint light-test-hint">${dev.connected ? 'Tip: use device name + ID to avoid mixing up similar lights.' : 'Connect first to run test commands.'}</p>
+      </div>
+      `;
+    }
 
     // Connect / Disconnect
     if (dev.connected) {
@@ -431,6 +588,18 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    content.querySelectorAll('.btn-detail-light-test').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await runLightTestAction(btn.dataset.deviceId, btn.dataset.action, btn);
+        const currentDevices = BluetoothScanner.getDevices();
+        if (currentDevices.find(x => x.id === deviceId)) {
+          showDeviceDetail(deviceId);
+          renderDeviceList();
+        }
+      });
+    });
+
     // Char read buttons
     content.querySelectorAll('.btn-char-read').forEach(btn => {
       btn.addEventListener('click', async (e) => {
@@ -439,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const freshDevices = BluetoothScanner.getDevices();
         const d = freshDevices.find(x => x.id === btn.dataset.deviceId);
         if (!d) return;
-        const charInfo = d.characteristics.find(c => c.uuid === charUuid);
+        const charInfo = d.characteristics.find(c => normalizeUuid(c.uuid) === normalizeUuid(charUuid));
         if (!charInfo) return;
         btn.disabled = true;
         btn.textContent = 'Reading...';
@@ -462,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const freshDevices = BluetoothScanner.getDevices();
         const d = freshDevices.find(x => x.id === btn.dataset.deviceId);
         if (!d) return;
-        const charInfo = d.characteristics.find(c => c.uuid === charUuid);
+        const charInfo = d.characteristics.find(c => normalizeUuid(c.uuid) === normalizeUuid(charUuid));
         if (!charInfo) return;
         btn.disabled = true;
         btn.textContent = 'Subscribing...';
@@ -499,14 +668,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const hexVal = input.value.trim();
         if (!hexVal) { showToast('Enter a hex value first', 'error'); return; }
         // Validate hex
-        if (!/^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2})*$/.test(hexVal) && !/^[0-9a-fA-F]+$/.test(hexVal)) {
-          showToast('Invalid hex format. Use XX:XX or XXXX', 'error');
+        if (!isValidHexInput(hexVal)) {
+          showToast('Invalid hex format. Use an even number of bytes (e.g., FF or 01:FF:AB).', 'error');
           return;
         }
         const freshDevices = BluetoothScanner.getDevices();
         const d = freshDevices.find(x => x.id === btn.dataset.deviceId);
         if (!d) return;
-        const charInfo = d.characteristics.find(c => c.uuid === charUuid);
+        const charInfo = d.characteristics.find(c => normalizeUuid(c.uuid) === normalizeUuid(charUuid));
         if (!charInfo) return;
         btn.disabled = true;
         btn.textContent = 'Writing...';
@@ -730,6 +899,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnAgentStop.addEventListener('click', () => {
     Advanced.stop();
+    agentStatusCard.style.display = 'none';
+    agentFeed.innerHTML = '';
+    agentResultsCard.style.display = 'none';
+    document.getElementById('vuln-report-card').style.display = 'none';
+    agentBadge.textContent = 'idle';
+    agentBadge.className = 'agent-badge agent-idle';
+    btnAgentStop.disabled = true;
+    btnAgentFull.disabled = false;
+    btnAgentQuick.disabled = false;
     showToast('Agent stopped', 'info');
   });
 

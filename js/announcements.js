@@ -99,6 +99,36 @@ const Announcements = (() => {
       throw new Error('No device connected');
     }
 
+    const normalizeUuid = (uuid) => {
+      const raw = String(uuid || '').toLowerCase();
+      if (typeof BluetoothUUID !== 'undefined' && typeof BluetoothUUID.canonicalUUID === 'function') {
+        try {
+          return BluetoothUUID.canonicalUUID(raw);
+        } catch (_) {
+          // Fall through to local normalization
+        }
+      }
+      if (/^[0-9a-f]{4}$/.test(raw)) {
+        return `0000${raw}-0000-1000-8000-00805f9b34fb`;
+      }
+      return raw;
+    };
+    const capturedServices = new Set(profile.services.map(s => normalizeUuid(s.uuid)));
+    const connectedServices = new Set((deviceInfo.services || []).map(s => normalizeUuid(s.uuid)));
+    let sharedServiceCount = 0;
+    for (const svcUuid of capturedServices) {
+      if (connectedServices.has(svcUuid)) sharedServiceCount++;
+    }
+
+    const overlapRatio = capturedServices.size > 0 ? (sharedServiceCount / capturedServices.size) : 0;
+    if (deviceInfo.id !== profile.deviceId && overlapRatio < 0.5) {
+      Logger.error('Replay blocked: connected device does not match capture profile');
+      throw new Error('Connected device does not match this capture profile');
+    }
+    if (deviceInfo.id !== profile.deviceId) {
+      Logger.warn(`Replay target differs from capture source (${profile.deviceId} -> ${deviceInfo.id})`);
+    }
+
     Logger.info(`Replaying profile "${profile.deviceName}" to ${deviceInfo.name}...`);
 
     let written = 0;
@@ -106,6 +136,7 @@ const Announcements = (() => {
     let failed = 0;
 
     for (const svc of profile.services) {
+      const targetService = deviceInfo.services.find(s => normalizeUuid(s.uuid) === normalizeUuid(svc.uuid));
       for (const capturedChar of svc.characteristics) {
         if (!capturedChar.value) {
           skipped++;
@@ -119,12 +150,24 @@ const Announcements = (() => {
           continue;
         }
 
-        // Find matching characteristic on connected device
-        const targetChar = deviceInfo.characteristics.find(
-          c => c.uuid === capturedChar.uuid
+        if (!targetService) {
+          skipped++;
+          continue;
+        }
+
+        // Find matching characteristic on connected device within same service
+        const targetChar = targetService.characteristics.find(
+          c => normalizeUuid(c.uuid) === normalizeUuid(capturedChar.uuid)
         );
 
         if (!targetChar) {
+          skipped++;
+          continue;
+        }
+
+        const targetWritable = targetChar.properties.includes('write') ||
+          targetChar.properties.includes('writeNoResp');
+        if (!targetWritable) {
           skipped++;
           continue;
         }

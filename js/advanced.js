@@ -11,6 +11,8 @@ const Advanced = (() => {
   let stopRequested = false;
   let statusCallback = null;
   let discoveryLog = [];
+  let activeRunToken = 0;
+  const MAX_LOG_ENTRIES = 1000;
 
   const AGENT_STATES = {
     IDLE: 'idle',
@@ -28,7 +30,8 @@ const Advanced = (() => {
 
   let currentState = AGENT_STATES.IDLE;
 
-  function setStatus(state, message, data) {
+  function setStatus(state, message, data, runToken) {
+    if (typeof runToken === 'number' && runToken !== activeRunToken) return;
     currentState = state;
     const entry = {
       time: new Date().toISOString(),
@@ -37,6 +40,9 @@ const Advanced = (() => {
       data: data || null
     };
     discoveryLog.push(entry);
+    if (discoveryLog.length > MAX_LOG_ENTRIES) {
+      discoveryLog.splice(0, discoveryLog.length - MAX_LOG_ENTRIES);
+    }
     Logger.info(`[Agent] ${message}`);
     if (statusCallback) statusCallback(entry);
   }
@@ -60,6 +66,7 @@ const Advanced = (() => {
   function stop() {
     if (!running) return;
     stopRequested = true;
+    activeRunToken++;
     setStatus(AGENT_STATES.IDLE, 'Agent stopped by user');
     running = false;
   }
@@ -74,9 +81,12 @@ const Advanced = (() => {
       return null;
     }
 
+    const runToken = ++activeRunToken;
     running = true;
     stopRequested = false;
     discoveryLog = [];
+    const emit = (state, message, data) => setStatus(state, message, data, runToken);
+    const shouldStop = () => stopRequested || runToken !== activeRunToken;
 
     const results = {
       devicesFound: 0,
@@ -91,42 +101,44 @@ const Advanced = (() => {
 
     try {
       // Phase 1: Scan for devices
-      setStatus(AGENT_STATES.SCANNING, 'Initiating broad BLE scan...');
+      emit(AGENT_STATES.SCANNING, 'Initiating broad BLE scan...');
 
       let deviceInfo;
       try {
         deviceInfo = await BluetoothScanner.scanAll();
+        if (shouldStop()) return results;
         results.devicesFound++;
-        setStatus(AGENT_STATES.SCANNING,
+        emit(AGENT_STATES.SCANNING,
           `Found device: ${deviceInfo.name} (${deviceInfo.id})`,
           { name: deviceInfo.name, id: deviceInfo.id });
       } catch (err) {
         if (err.name === 'NotFoundError') {
-          setStatus(AGENT_STATES.IDLE, 'Scan cancelled - no device selected');
-          running = false;
+          emit(AGENT_STATES.IDLE, 'Scan cancelled - no device selected');
           return results;
         }
         throw err;
       }
 
-      if (stopRequested) return results;
+      if (shouldStop()) return results;
 
       // Phase 2: Connect
-      setStatus(AGENT_STATES.CONNECTING, `Connecting to ${deviceInfo.name}...`);
+      emit(AGENT_STATES.CONNECTING, `Connecting to ${deviceInfo.name}...`);
 
       try {
         await BluetoothScanner.connect(deviceInfo.id);
-        setStatus(AGENT_STATES.CONNECTING, `Connected to ${deviceInfo.name}`);
+        if (shouldStop()) return results;
+        emit(AGENT_STATES.CONNECTING, `Connected to ${deviceInfo.name}`);
       } catch (err) {
-        setStatus(AGENT_STATES.ERROR,
+        emit(AGENT_STATES.ERROR,
           `Connection failed: ${err.message} - analyzing what we have`);
-        return finalize(results);
+        if (shouldStop()) return results;
+        return finalize(results, runToken);
       }
 
-      if (stopRequested) return results;
+      if (shouldStop()) return results;
 
       // Phase 3: Enumerate services (already done by connect)
-      setStatus(AGENT_STATES.ENUMERATING, 'Enumerating GATT services and characteristics...');
+      emit(AGENT_STATES.ENUMERATING, 'Enumerating GATT services and characteristics...');
 
       const updatedInfo = BluetoothScanner.getDevices().find(d => d.id === deviceInfo.id);
       if (updatedInfo) {
@@ -139,25 +151,26 @@ const Advanced = (() => {
             }
           }
         }
-        setStatus(AGENT_STATES.ENUMERATING,
+        emit(AGENT_STATES.ENUMERATING,
           `Found ${results.servicesFound} services, ${results.characteristicsFound} characteristics`,
           { services: results.servicesFound, chars: results.characteristicsFound });
       }
 
-      if (stopRequested) return results;
+      if (shouldStop()) return results;
 
       // Phase 4: Deep read all readable characteristics
-      setStatus(AGENT_STATES.READING, 'Reading all accessible characteristic values...');
+      emit(AGENT_STATES.READING, 'Reading all accessible characteristic values...');
 
       if (updatedInfo) {
         for (const svc of updatedInfo.services) {
           for (const ch of svc.characteristics) {
-            if (stopRequested) break;
+            if (shouldStop()) break;
             if (ch.properties.includes('read') && ch.characteristic) {
               try {
                 await BluetoothScanner.readCharacteristic(ch);
+                if (shouldStop()) return results;
                 results.readableValues++;
-                setStatus(AGENT_STATES.READING,
+                emit(AGENT_STATES.READING,
                   `Read ${ch.name}: ${ch.value || '(empty)'}`,
                   { char: ch.name, value: ch.value });
               } catch (_) {
@@ -166,54 +179,62 @@ const Advanced = (() => {
             }
           }
         }
-        setStatus(AGENT_STATES.READING,
+        emit(AGENT_STATES.READING,
           `Read ${results.readableValues} characteristic values`);
       }
 
-      if (stopRequested) return results;
+      if (shouldStop()) return results;
 
       // Phase 5: Capture profile
-      setStatus(AGENT_STATES.CAPTURING, 'Capturing full device profile snapshot...');
+      emit(AGENT_STATES.CAPTURING, 'Capturing full device profile snapshot...');
 
       try {
         const profile = await Announcements.captureFromDevice();
+        if (shouldStop()) return results;
         results.captureId = profile.id;
-        setStatus(AGENT_STATES.CAPTURING,
+        emit(AGENT_STATES.CAPTURING,
           `Profile captured: ${profile.totalChars} chars, ${profile.readableChars} readable`,
           { captureId: profile.id });
       } catch (err) {
-        setStatus(AGENT_STATES.ERROR, `Capture failed: ${err.message}`);
+        emit(AGENT_STATES.ERROR, `Capture failed: ${err.message}`);
       }
 
-      if (stopRequested) return results;
+      if (shouldStop()) return results;
 
       // Phase 6: Vulnerability assessment
-      setStatus(AGENT_STATES.VULN_ASSESS, 'Running vulnerability assessment...');
+      emit(AGENT_STATES.VULN_ASSESS, 'Running vulnerability assessment...');
 
       try {
         const vulnReport = Vulnerability.assessDevice(updatedInfo);
         results.vulnReport = vulnReport;
-        setStatus(AGENT_STATES.VULN_ASSESS,
+        emit(AGENT_STATES.VULN_ASSESS,
           `Assessment: ${vulnReport.riskLevel} risk (score ${vulnReport.riskScore}/100), ${vulnReport.findings.length} findings`,
           { riskLevel: vulnReport.riskLevel, riskScore: vulnReport.riskScore, findingCount: vulnReport.findings.length });
       } catch (err) {
-        setStatus(AGENT_STATES.ERROR, `Vulnerability assessment failed: ${err.message}`);
+        emit(AGENT_STATES.ERROR, `Vulnerability assessment failed: ${err.message}`);
       }
 
-      if (stopRequested) return results;
+      if (shouldStop()) return results;
 
       // Phase 7: Analyze findings
-      return finalize(results);
+      if (shouldStop()) return results;
+      return finalize(results, runToken);
 
     } catch (err) {
-      setStatus(AGENT_STATES.ERROR, `Agent error: ${err.message}`);
-      running = false;
+      if (!shouldStop()) {
+        emit(AGENT_STATES.ERROR, `Agent error: ${err.message}`);
+      }
       return results;
+    } finally {
+      if (runToken === activeRunToken) {
+        running = false;
+      }
     }
   }
 
-  function finalize(results) {
-    setStatus(AGENT_STATES.ANALYZING, 'Analyzing discovery results...');
+  function finalize(results, runToken) {
+    if (runToken !== activeRunToken) return results;
+    setStatus(AGENT_STATES.ANALYZING, 'Analyzing discovery results...', null, runToken);
 
     const analysis = {
       summary: [],
@@ -263,8 +284,7 @@ const Advanced = (() => {
 
     results.analysis = analysis;
 
-    setStatus(AGENT_STATES.COMPLETE, 'Discovery complete', results);
-    running = false;
+    setStatus(AGENT_STATES.COMPLETE, 'Discovery complete', results, runToken);
     return results;
   }
 
@@ -273,23 +293,31 @@ const Advanced = (() => {
    */
   async function quickScan() {
     if (running) return null;
+    const runToken = ++activeRunToken;
     running = true;
     stopRequested = false;
     discoveryLog = [];
+    const emit = (state, message, data) => setStatus(state, message, data, runToken);
+    const shouldStop = () => stopRequested || runToken !== activeRunToken;
 
-    setStatus(AGENT_STATES.SCANNING, 'Quick scan — select a device to identify...');
+    emit(AGENT_STATES.SCANNING, 'Quick scan — select a device to identify...');
 
     try {
       const info = await BluetoothScanner.scanAll();
-      setStatus(AGENT_STATES.COMPLETE,
+      if (shouldStop()) return null;
+      emit(AGENT_STATES.COMPLETE,
         `Identified: ${info.name} (${info.id})`,
         { name: info.name, id: info.id });
-      running = false;
       return info;
     } catch (err) {
-      setStatus(AGENT_STATES.IDLE, 'Quick scan cancelled');
-      running = false;
+      if (!shouldStop()) {
+        emit(AGENT_STATES.IDLE, 'Quick scan cancelled');
+      }
       return null;
+    } finally {
+      if (runToken === activeRunToken) {
+        running = false;
+      }
     }
   }
 
