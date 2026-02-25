@@ -517,6 +517,16 @@ body {
   color: var(--accent-blue);
 }
 
+.tag-light {
+  background: rgba(255, 171, 64, 0.16);
+  color: var(--accent-orange);
+}
+
+.tag-best-test {
+  background: rgba(0, 229, 255, 0.15);
+  color: var(--accent-cyan);
+}
+
 .device-actions {
   display: flex;
   gap: 8px;
@@ -1018,6 +1028,28 @@ body {
   margin-top: 6px;
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-light-test,
+.btn-detail-light-test {
+  min-width: 58px;
+}
+
+.light-test-section .detail-value {
+  max-width: 68%;
+}
+
+.light-test-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.light-test-hint {
+  margin-top: 8px;
+  margin-bottom: 0;
 }
 
 /* ===== Device List Header ===== */

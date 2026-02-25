@@ -212,9 +212,14 @@ assert(appJs.includes('setVolume'), 'Calls setVolume');
 assert(appJs.includes('btn-char-write-toggle'), 'Has write toggle button handler');
 assert(appJs.includes('btn-char-write-send'), 'Has write send button handler');
 assert(appJs.includes('Invalid hex'), 'Validates hex input');
+assert(appJs.includes('isValidHexInput'), 'Uses strict hex validation helper');
 
 // Reconnect button
 assert(appJs.includes('btn-reconnect'), 'Has reconnect button in device list');
+assert(appJs.includes('btn-light-test'), 'Has quick smart-light test buttons');
+assert(appJs.includes('btn-detail-light-test'), 'Has detail smart-light test buttons');
+assert(appJs.includes('runLightTestAction'), 'Has smart-light test action runner');
+assert(appJs.includes('Best suggested test'), 'Shows best test suggestion from GATT');
 
 // Capture/replay in devices tab
 assert(appJs.includes('renderCaptures'), 'Has renderCaptures function');
@@ -230,6 +235,11 @@ assert(appJs.includes('vuln-recommendations'), 'Renders vulnerability recommenda
 
 // Service worker registration
 assert(appJs.includes('serviceWorker'), 'Registers service worker');
+
+// Agent stop reset bugfix
+assert(appJs.includes('agentFeed.innerHTML = \'\''), 'Stop button clears agent feed');
+assert(appJs.includes('agentResultsCard.style.display = \'none\''), 'Stop button hides agent results');
+assert(appJs.includes('agentBadge.textContent = \'idle\''), 'Stop button resets agent badge');
 
 // --- Audio Player Tests ---
 section('Audio Player Module');
@@ -283,6 +293,8 @@ assert(advJs.includes('vulnReport'), 'Tracks vulnerability report in results');
 assert(advJs.includes('runFullDiscovery'), 'Has full discovery');
 assert(advJs.includes('quickScan'), 'Has quick scan');
 assert(advJs.includes('running = false'), 'Sets running=false on cancel');
+assert(advJs.includes('MAX_LOG_ENTRIES'), 'Caps agent log growth');
+assert(advJs.includes('activeRunToken'), 'Tracks active run token for stop safety');
 
 // --- Sharing Module Tests ---
 section('Sharing Module');
@@ -310,6 +322,19 @@ assert(btJs.includes('Bluefy detected'), 'Has Bluefy-specific detection message'
 assert(btJs.includes('connectedDevice.id === deviceId'), 'Disconnect checks specific device');
 assert(btJs.includes('writeCharacteristic'), 'Has write characteristic');
 assert(btJs.includes('writeValueWithoutResponse'), 'Supports writeWithoutResponse');
+assert(btJs.includes('SMART_LIGHT_SERVICE_UUIDS'), 'Defines smart light service UUIDs');
+assert(btJs.includes('0000ffd5-0000-1000-8000-00805f9b34fb'), 'Includes Govee-like service UUID');
+assert(btJs.includes('lightTestPlan'), 'Stores suggested light test plan');
+
+// --- Announcements / Replay Tests ---
+section('Announcements Replay Safety');
+
+const annJs = fs.readFileSync(path.join(ROOT, 'js/announcements.js'), 'utf8');
+assert(annJs.includes('Connected device does not match this capture profile'), 'Blocks replay to unrelated devices');
+assert(annJs.includes('targetService'), 'Matches replay writes by service + characteristic');
+assert(annJs.includes('deviceInfo.id !== profile.deviceId'), 'Checks replay target device ID');
+assert(annJs.includes('overlapRatio < 0.5'), 'Requires meaningful service overlap for cross-device replay');
+assert(annJs.includes('normalizeUuid'), 'Normalizes UUIDs before matching during replay');
 
 // --- CSS Tests ---
 section('CSS Quality');
@@ -336,6 +361,9 @@ assert(css.includes('.empty-icon'), 'Enhanced empty state styles');
 assert(css.includes('.device-quick-actions'), 'Device quick actions styles');
 assert(css.includes('.device-list-header'), 'Device list header styles');
 assert(css.includes('.mimic-status'), 'Mimic status styles');
+assert(css.includes('.tag-light'), 'Has smart-light tag styles');
+assert(css.includes('.tag-best-test'), 'Has best-test tag styles');
+assert(css.includes('.light-test-actions'), 'Has smart-light action styles');
 assert(css.includes('.vuln-score-banner'), 'Vulnerability score banner styles');
 assert(css.includes('.vuln-finding'), 'Vulnerability finding styles');
 assert(css.includes('.vuln-sev-badge'), 'Vulnerability severity badge styles');
