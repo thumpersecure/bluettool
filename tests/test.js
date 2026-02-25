@@ -37,6 +37,7 @@ const requiredFiles = [
   'js/bluetooth-scanner.js',
   'js/announcements.js',
   'js/audio-player.js',
+  'js/vulnerability.js',
   'js/advanced.js',
   'js/sharing.js',
   'audio/dtmf-fax-tones.wav',
@@ -98,6 +99,14 @@ assert(html.includes('id="btn-mimic"'), 'Has replay button');
 assert(html.includes('id="device-detail"'), 'Has device detail panel');
 assert(html.includes('id="btn-back-devices"'), 'Has back button in detail');
 
+// Vulnerability report UI
+assert(html.includes('id="vuln-report-card"'), 'Has vulnerability report card');
+assert(html.includes('id="vuln-score-banner"'), 'Has vulnerability score banner');
+assert(html.includes('id="vuln-stats"'), 'Has vulnerability stats section');
+assert(html.includes('id="vuln-findings"'), 'Has vulnerability findings section');
+assert(html.includes('id="vuln-recommendations"'), 'Has vulnerability recommendations section');
+assert(html.includes('vulnerability.js'), 'Loads vulnerability.js');
+
 // No rickroll
 assert(!html.includes('rickroll'), 'No rickroll references in HTML');
 assert(html.includes('id="audio-overlay"'), 'Has audio overlay');
@@ -113,6 +122,7 @@ const scriptOrder = [
   'js/bluetooth-scanner.js',
   'js/announcements.js',
   'js/audio-player.js',
+  'js/vulnerability.js',
   'js/advanced.js',
   'js/sharing.js',
   'js/app.js'
@@ -137,6 +147,7 @@ const jsFiles = [
   'js/bluetooth-scanner.js',
   'js/announcements.js',
   'js/audio-player.js',
+  'js/vulnerability.js',
   'js/advanced.js',
   'js/sharing.js',
 ];
@@ -163,6 +174,7 @@ const swContent = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 assert(swContent.includes('CACHE_NAME'), 'Service worker has cache name');
 assert(swContent.includes('install'), 'Service worker has install handler');
 assert(swContent.includes('fetch'), 'Service worker has fetch handler');
+assert(swContent.includes('vulnerability.js'), 'Service worker caches vulnerability.js');
 
 // --- App.js Features ---
 section('App.js Feature Verification');
@@ -209,6 +221,13 @@ assert(appJs.includes('renderCaptures'), 'Has renderCaptures function');
 assert(appJs.includes('mimic-select'), 'Has mimic select handler');
 assert(appJs.includes('Replay'), 'References Replay functionality');
 
+// Vulnerability report rendering
+assert(appJs.includes('renderVulnReport'), 'Has renderVulnReport function');
+assert(appJs.includes('vuln-report-card'), 'Wires vulnerability report card');
+assert(appJs.includes('vuln-score-banner'), 'Renders vulnerability score banner');
+assert(appJs.includes('vuln-findings'), 'Renders vulnerability findings');
+assert(appJs.includes('vuln-recommendations'), 'Renders vulnerability recommendations');
+
 // Service worker registration
 assert(appJs.includes('serviceWorker'), 'Registers service worker');
 
@@ -230,12 +249,37 @@ assert(audioJs.includes('pendingTimeouts'), 'Tracks pending timeouts for cleanup
 assert(audioJs.includes('[697, 1209]'), 'Correct DTMF freq for digit 1');
 assert(audioJs.includes('[941, 1336]'), 'Correct DTMF freq for digit 0');
 
+// --- Vulnerability Module Tests ---
+section('Vulnerability Assessment Module');
+
+const vulnJs = fs.readFileSync(path.join(ROOT, 'js/vulnerability.js'), 'utf8');
+
+assert(vulnJs.includes('SEVERITY'), 'Defines severity levels');
+assert(vulnJs.includes('assessDevice'), 'Has assessDevice function');
+assert(vulnJs.includes('assessConnected'), 'Has assessConnected convenience function');
+assert(vulnJs.includes('SENSITIVE_CHAR_UUIDS'), 'Has sensitive characteristic map');
+assert(vulnJs.includes('SERVICE_CATEGORIES'), 'Has service category map');
+assert(vulnJs.includes('generateRecommendations'), 'Generates targeted recommendations');
+assert(vulnJs.includes('buildReport'), 'Builds structured reports');
+assert(vulnJs.includes('riskScore'), 'Calculates risk score');
+assert(vulnJs.includes('riskLevel'), 'Determines risk level');
+assert(vulnJs.includes('Write Access'), 'Checks write access vulnerabilities');
+assert(vulnJs.includes('Information Disclosure'), 'Checks information disclosure');
+assert(vulnJs.includes('Authentication'), 'Checks authentication status');
+assert(vulnJs.includes('Data Streaming'), 'Checks notification data streaming');
+assert(vulnJs.includes('Bidirectional Access'), 'Checks bidirectional access');
+assert(vulnJs.includes('HID Exposure'), 'Checks HID service exposure');
+assert(vulnJs.includes('personal testing'), 'Has personal testing disclaimer');
+
 // --- Advanced Module Tests ---
 section('Advanced Agent Module');
 
 const advJs = fs.readFileSync(path.join(ROOT, 'js/advanced.js'), 'utf8');
 
 assert(advJs.includes('AGENT_STATES'), 'Defines agent states');
+assert(advJs.includes('VULN_ASSESS'), 'Has vulnerability assessment state');
+assert(advJs.includes('Vulnerability.assessDevice'), 'Integrates vulnerability assessment');
+assert(advJs.includes('vulnReport'), 'Tracks vulnerability report in results');
 assert(advJs.includes('runFullDiscovery'), 'Has full discovery');
 assert(advJs.includes('quickScan'), 'Has quick scan');
 assert(advJs.includes('running = false'), 'Sets running=false on cancel');
@@ -292,6 +336,15 @@ assert(css.includes('.empty-icon'), 'Enhanced empty state styles');
 assert(css.includes('.device-quick-actions'), 'Device quick actions styles');
 assert(css.includes('.device-list-header'), 'Device list header styles');
 assert(css.includes('.mimic-status'), 'Mimic status styles');
+assert(css.includes('.vuln-score-banner'), 'Vulnerability score banner styles');
+assert(css.includes('.vuln-finding'), 'Vulnerability finding styles');
+assert(css.includes('.vuln-sev-badge'), 'Vulnerability severity badge styles');
+assert(css.includes('.vuln-risk-critical'), 'Critical risk styling');
+assert(css.includes('.vuln-risk-high'), 'High risk styling');
+assert(css.includes('.vuln-risk-medium'), 'Medium risk styling');
+assert(css.includes('.vuln-risk-low'), 'Low risk styling');
+assert(css.includes('.vuln-rec'), 'Vulnerability recommendation styles');
+assert(css.includes('.agent-vuln_assess'), 'Agent vuln_assess state styling');
 assert(!css.includes('rickroll'), 'No rickroll in CSS');
 
 // --- Audio File Tests ---

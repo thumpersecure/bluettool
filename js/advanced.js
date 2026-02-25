@@ -19,6 +19,7 @@ const Advanced = (() => {
     ENUMERATING: 'enumerating',
     READING: 'reading',
     CAPTURING: 'capturing',
+    VULN_ASSESS: 'vuln_assess',
     ANALYZING: 'analyzing',
     MIMICKING: 'mimicking',
     COMPLETE: 'complete',
@@ -84,6 +85,7 @@ const Advanced = (() => {
       readableValues: 0,
       writableChars: 0,
       captureId: null,
+      vulnReport: null,
       analysis: null
     };
 
@@ -185,7 +187,22 @@ const Advanced = (() => {
 
       if (stopRequested) return results;
 
-      // Phase 6: Analyze findings
+      // Phase 6: Vulnerability assessment
+      setStatus(AGENT_STATES.VULN_ASSESS, 'Running vulnerability assessment...');
+
+      try {
+        const vulnReport = Vulnerability.assessDevice(updatedInfo);
+        results.vulnReport = vulnReport;
+        setStatus(AGENT_STATES.VULN_ASSESS,
+          `Assessment: ${vulnReport.riskLevel} risk (score ${vulnReport.riskScore}/100), ${vulnReport.findings.length} findings`,
+          { riskLevel: vulnReport.riskLevel, riskScore: vulnReport.riskScore, findingCount: vulnReport.findings.length });
+      } catch (err) {
+        setStatus(AGENT_STATES.ERROR, `Vulnerability assessment failed: ${err.message}`);
+      }
+
+      if (stopRequested) return results;
+
+      // Phase 7: Analyze findings
       return finalize(results);
 
     } catch (err) {
@@ -227,8 +244,18 @@ const Advanced = (() => {
       );
     }
 
-    analysis.recommendations.push('Review writable characteristics for input validation testing');
-    analysis.recommendations.push('Check if sensitive data is exposed via readable characteristics');
+    if (results.vulnReport) {
+      analysis.summary.push(`Vulnerability score: ${results.vulnReport.riskScore}/100 (${results.vulnReport.riskLevel})`);
+      for (const f of results.vulnReport.findings.filter(f => f.severity === 'critical' || f.severity === 'high')) {
+        analysis.riskFactors.push(`[${f.severity.toUpperCase()}] ${f.title}: ${f.detail}`);
+      }
+      for (const rec of results.vulnReport.recommendations) {
+        analysis.recommendations.push(`[${rec.priority.toUpperCase()}] ${rec.text}`);
+      }
+    } else {
+      analysis.recommendations.push('Review writable characteristics for input validation testing');
+      analysis.recommendations.push('Check if sensitive data is exposed via readable characteristics');
+    }
     analysis.recommendations.push('Test replay of captured values to verify write protections');
     if (results.captureId) {
       analysis.recommendations.push('Profile captured — use Replay in the Announce tab for write testing');

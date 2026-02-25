@@ -953,6 +953,168 @@ body {
 .mimic-success { color: var(--accent-green); }
 .mimic-error { color: var(--accent-red); }
 
+/* ===== Vulnerability Report ===== */
+.vuln-score-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+.vuln-score-banner.vuln-risk-critical {
+  background: rgba(255, 82, 82, 0.15);
+  border: 1px solid rgba(255, 82, 82, 0.3);
+}
+
+.vuln-score-banner.vuln-risk-high {
+  background: rgba(255, 171, 64, 0.15);
+  border: 1px solid rgba(255, 171, 64, 0.3);
+}
+
+.vuln-score-banner.vuln-risk-medium {
+  background: rgba(74, 125, 255, 0.15);
+  border: 1px solid rgba(74, 125, 255, 0.3);
+}
+
+.vuln-score-banner.vuln-risk-low {
+  background: rgba(0, 230, 118, 0.12);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+}
+
+.vuln-score-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.vuln-score-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Menlo', monospace;
+}
+
+.vuln-risk-critical .vuln-score-label,
+.vuln-risk-critical .vuln-score-value { color: var(--accent-red); }
+.vuln-risk-high .vuln-score-label,
+.vuln-risk-high .vuln-score-value { color: var(--accent-orange); }
+.vuln-risk-medium .vuln-score-label,
+.vuln-risk-medium .vuln-score-value { color: var(--accent-blue); }
+.vuln-risk-low .vuln-score-label,
+.vuln-risk-low .vuln-score-value { color: var(--accent-green); }
+
+.vuln-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.vuln-stat {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+}
+
+.vuln-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.vuln-finding {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border-left: 3px solid;
+  background: var(--bg-input);
+}
+
+.vuln-finding.sev-critical { border-left-color: var(--accent-red); }
+.vuln-finding.sev-high { border-left-color: var(--accent-orange); }
+.vuln-finding.sev-medium { border-left-color: var(--accent-blue); }
+.vuln-finding.sev-low { border-left-color: var(--accent-green); }
+.vuln-finding.sev-info { border-left-color: var(--text-hint); }
+
+.vuln-finding-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.vuln-sev-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.vuln-sev-badge.sev-critical { background: rgba(255, 82, 82, 0.2); color: var(--accent-red); }
+.vuln-sev-badge.sev-high { background: rgba(255, 171, 64, 0.2); color: var(--accent-orange); }
+.vuln-sev-badge.sev-medium { background: rgba(74, 125, 255, 0.2); color: var(--accent-blue); }
+.vuln-sev-badge.sev-low { background: rgba(0, 230, 118, 0.15); color: var(--accent-green); }
+.vuln-sev-badge.sev-info { background: var(--bg-input); color: var(--text-hint); }
+
+.vuln-finding-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.vuln-finding-detail {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.vuln-finding-category {
+  font-size: 10px;
+  color: var(--text-hint);
+  margin-top: 2px;
+}
+
+.vuln-recommendations {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vuln-recommendations h3 {
+  font-size: 13px;
+  color: var(--accent-cyan);
+  margin-bottom: 4px;
+}
+
+.vuln-rec {
+  font-size: 11px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.vuln-rec-priority {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+
+.vuln-rec-priority.pri-high { color: var(--accent-orange); }
+.vuln-rec-priority.pri-medium { color: var(--accent-blue); }
+.vuln-rec-priority.pri-low { color: var(--accent-green); }
+.vuln-rec-priority.pri-info { color: var(--text-hint); }
+
+.agent-vuln_assess { background: rgba(255, 82, 82, 0.15); color: var(--accent-red); }
+
 /* ===== Scrollbar ===== */
 ::-webkit-scrollbar {
   width: 3px;
