@@ -57,6 +57,14 @@ const BluetoothScanner = (() => {
       detail: 'Checking...'
     });
 
+    // Classic Bluetooth via Web Serial (Chrome 117+)
+    const hasSerial = !!navigator.serial;
+    results.push({
+      name: 'Classic Bluetooth (Web Serial)',
+      ok: hasSerial,
+      detail: hasSerial ? 'Available — RFCOMM/SPP on paired devices' : 'Chrome 117+ required for Classic BT'
+    });
+
     if (navigator.bluetooth && navigator.bluetooth.getAvailability) {
       navigator.bluetooth.getAvailability().then(available => {
         results[3].ok = available;
@@ -411,7 +419,7 @@ const BluetoothScanner = (() => {
     const clean = hex.replace(/[:\s]/g, '');
     const bytes = [];
     for (let i = 0; i < clean.length; i += 2) {
-      bytes.push(parseInt(clean.substr(i, 2), 16));
+      bytes.push(parseInt(clean.substring(i, i + 2), 16));
     }
     return bytes;
   }

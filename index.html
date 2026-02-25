@@ -51,6 +51,12 @@
             Scan All (No Filter)
           </button>
         </div>
+        <div id="classic-bt-section" class="filter-section" style="margin-top:12px;">
+          <h3>Classic Bluetooth (Chrome 117+)</h3>
+          <p class="hint">Web Serial API connects to paired Bluetooth Classic devices (RFCOMM/SPP).</p>
+          <button id="btn-serial-connect" class="btn btn-secondary">Connect Classic BT Device</button>
+          <span id="serial-status" class="serial-status"></span>
+        </div>
         <div id="scan-filters" class="filter-section">
           <h3>Scan Filters</h3>
           <label class="toggle-label">
@@ -69,6 +75,17 @@
       <div class="card" id="compatibility-card">
         <h2>Browser Compatibility</h2>
         <div id="compat-status"></div>
+      </div>
+
+      <div class="card" id="bluefy-home-screen-card">
+        <h2>Add to Home Screen (Bluefy)</h2>
+        <p class="hint">Save BlueTTool to your iPhone home screen for quick access:</p>
+        <ol class="home-screen-steps">
+          <li>Tap the <strong>Share</strong> button (square with arrow) in Bluefy</li>
+          <li>Scroll and tap <strong>Add to Home Screen</strong></li>
+          <li>Tap <strong>Add</strong> to confirm</li>
+        </ol>
+        <p class="hint">The app will open like a native app from your home screen.</p>
       </div>
 
       <div class="card card-disclaimer">
@@ -281,6 +298,7 @@
   <script src="js/logger.js"></script>
   <script src="js/call-history.js"></script>
   <script src="js/bluetooth-scanner.js"></script>
+  <script src="js/serial-bluetooth.js"></script>
   <script src="js/announcements.js"></script>
   <script src="js/audio-player.js"></script>
   <script src="js/vulnerability.js"></script>
