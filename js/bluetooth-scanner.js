@@ -32,17 +32,20 @@ const BluetoothScanner = (() => {
 
     let browserDetail = 'Unknown browser';
     let browserOk = false;
-    if (isBluefy || isWebBLE) {
-      browserDetail = 'Bluefy/WebBLE detected - full BLE support';
+    if (isBluefy) {
+      browserDetail = 'Bluefy detected — full BLE support on iOS';
+      browserOk = true;
+    } else if (isWebBLE) {
+      browserDetail = 'WebBLE detected — BLE support available';
       browserOk = true;
     } else if (isChrome) {
-      browserDetail = 'Chrome detected - BLE supported on Android/Desktop';
+      browserDetail = 'Chrome — BLE works on Android/Desktop. For iOS use Bluefy.';
       browserOk = true;
     } else if (isSafari) {
-      browserDetail = 'Safari - limited Web Bluetooth (use Bluefy app on iOS)';
+      browserDetail = 'Safari — no Web Bluetooth. Install Bluefy from the App Store.';
       browserOk = false;
     } else {
-      browserDetail = 'Check browser compatibility';
+      browserDetail = 'Unknown browser — install Bluefy for iOS BLE support';
       browserOk = false;
     }
 
@@ -237,13 +240,21 @@ const BluetoothScanner = (() => {
    */
   function disconnect(deviceId) {
     const info = devices.get(deviceId);
-    if (!info || !info.device.gatt.connected) return;
+    if (!info) return;
 
-    Logger.info(`Disconnecting from ${info.name}...`);
-    info.device.gatt.disconnect();
+    try {
+      if (info.device.gatt.connected) {
+        Logger.info(`Disconnecting from ${info.name}...`);
+        info.device.gatt.disconnect();
+      }
+    } catch (_) {
+      // GATT may already be disconnected
+    }
     info.connected = false;
-    connectedDevice = null;
-    connectedServer = null;
+    if (connectedDevice && connectedDevice.id === deviceId) {
+      connectedDevice = null;
+      connectedServer = null;
+    }
     updateStatus('offline', 'Disconnected');
     if (onConnectionChange) onConnectionChange(info, false);
   }
