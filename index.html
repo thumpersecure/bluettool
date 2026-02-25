@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BlueTTool">
+  <meta name="theme-color" content="#0a0e27">
+  <link rel="apple-touch-icon" href="icons/icon-180.svg">
+  <link rel="manifest" href="manifest.json">
+  <title>BlueTTool - Bluetooth Scanner</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Status Bar -->
+    <header id="status-bar">
+      <div class="status-left">
+        <span id="bt-status-indicator" class="indicator offline"></span>
+        <span id="bt-status-text">Bluetooth Ready</span>
+      </div>
+      <div class="status-right">
+        <span id="device-count">0 devices</span>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav id="tab-bar">
+      <button class="tab active" data-tab="scanner">Scan</button>
+      <button class="tab" data-tab="devices">Devices</button>
+      <button class="tab" data-tab="announcements">Announce</button>
+      <button class="tab" data-tab="log">Log</button>
+    </nav>
+
+    <!-- Scanner Tab -->
+    <section id="scanner" class="tab-content active">
+      <div class="card">
+        <h2>Bluetooth Device Scanner</h2>
+        <p class="hint">Scans for nearby BLE devices using Web Bluetooth API. Tap scan to open the device chooser.</p>
+        <div class="scan-controls">
+          <button id="btn-scan" class="btn btn-primary btn-large">
+            <span class="btn-icon">&#x1F50E;</span> Scan for Devices
+          </button>
+          <button id="btn-scan-all" class="btn btn-secondary">
+            Scan All (Accept All Devices)
+          </button>
+        </div>
+        <div id="scan-filters" class="filter-section">
+          <h3>Scan Filters</h3>
+          <label class="toggle-label">
+            <input type="checkbox" id="filter-name" checked>
+            <span>Filter by name prefix</span>
+          </label>
+          <input type="text" id="filter-name-value" class="input-field" placeholder="Device name prefix...">
+          <label class="toggle-label">
+            <input type="checkbox" id="filter-services">
+            <span>Filter by service UUID</span>
+          </label>
+          <input type="text" id="filter-service-value" class="input-field" placeholder="Service UUID (e.g., heart_rate)">
+        </div>
+      </div>
+
+      <div class="card" id="compatibility-card">
+        <h2>Browser Compatibility</h2>
+        <div id="compat-status"></div>
+      </div>
+    </section>
+
+    <!-- Devices Tab -->
+    <section id="devices" class="tab-content">
+      <div class="card">
+        <h2>Discovered Devices</h2>
+        <div class="device-actions">
+          <button id="btn-clear-devices" class="btn btn-danger btn-small">Clear All</button>
+          <button id="btn-export-devices" class="btn btn-secondary btn-small">Export CSV</button>
+        </div>
+      </div>
+      <div id="device-list" class="device-list">
+        <div class="empty-state">No devices discovered yet. Start scanning!</div>
+      </div>
+
+      <!-- Device Detail Panel (slides in) -->
+      <div id="device-detail" class="detail-panel hidden">
+        <div class="detail-header">
+          <button id="btn-back-devices" class="btn btn-ghost">&larr; Back</button>
+          <h2 id="detail-device-name">Device</h2>
+        </div>
+        <div id="detail-content"></div>
+      </div>
+    </section>
+
+    <!-- Announcements Tab -->
+    <section id="announcements" class="tab-content">
+      <div class="card">
+        <h2>BLE Advertisement Capture</h2>
+        <p class="hint">Captures GATT service data and characteristic values from connected devices for analysis and replay testing.</p>
+        <button id="btn-capture" class="btn btn-primary" disabled>
+          Capture from Connected Device
+        </button>
+      </div>
+      <div id="captured-list" class="device-list">
+        <div class="empty-state">No captured data yet. Connect to a device first.</div>
+      </div>
+      <div class="card" id="mimic-card" style="display:none;">
+        <h2>Replay / Mimic</h2>
+        <p class="hint">Write previously captured characteristic values back to a connected device for replay testing.</p>
+        <select id="mimic-select" class="input-field">
+          <option value="">Select captured profile...</option>
+        </select>
+        <button id="btn-mimic" class="btn btn-warning" disabled>
+          Replay Captured Data
+        </button>
+        <div id="mimic-status"></div>
+      </div>
+    </section>
+
+    <!-- Log Tab -->
+    <section id="log" class="tab-content">
+      <div class="card">
+        <div class="log-header">
+          <h2>Activity Log</h2>
+          <div>
+            <button id="btn-copy-log" class="btn btn-secondary btn-small">Copy</button>
+            <button id="btn-clear-log" class="btn btn-danger btn-small">Clear</button>
+          </div>
+        </div>
+      </div>
+      <div id="log-output" class="log-output"></div>
+    </section>
+
+    <!-- Rick Roll Overlay -->
+    <div id="rickroll-overlay" class="overlay hidden">
+      <div class="overlay-content">
+        <h2>Device Connected Successfully!</h2>
+        <p>Initiating vulnerability test sequence...</p>
+        <div id="rickroll-container"></div>
+        <button id="btn-close-rickroll" class="btn btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/logger.js"></script>
+  <script src="js/bluetooth-scanner.js"></script>
+  <script src="js/announcements.js"></script>
+  <script src="js/rickroll.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
