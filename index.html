@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#0a0e27">
   <link rel="apple-touch-icon" href="icons/icon-180.svg">
   <link rel="manifest" href="manifest.json">
-  <title>BlueTTool - Bluetooth Scanner</title>
+  <title>BlueTTool</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -29,21 +29,22 @@
     <nav id="tab-bar">
       <button class="tab active" data-tab="scanner">Scan</button>
       <button class="tab" data-tab="devices">Devices</button>
-      <button class="tab" data-tab="announcements">Announce</button>
+      <button class="tab" data-tab="audio">Audio</button>
+      <button class="tab" data-tab="advanced">Agent</button>
       <button class="tab" data-tab="log">Log</button>
     </nav>
 
     <!-- Scanner Tab -->
     <section id="scanner" class="tab-content active">
       <div class="card">
-        <h2>Bluetooth Device Scanner</h2>
-        <p class="hint">Scans for nearby BLE devices using Web Bluetooth API. Tap scan to open the device chooser.</p>
+        <h2>BLE Device Scanner</h2>
+        <p class="hint">Scans for nearby BLE devices via Web Bluetooth in Bluefy. Tap to open device chooser.</p>
         <div class="scan-controls">
           <button id="btn-scan" class="btn btn-primary btn-large">
-            <span class="btn-icon">&#x1F50E;</span> Scan for Devices
+            Scan for Devices
           </button>
           <button id="btn-scan-all" class="btn btn-secondary">
-            Scan All (Accept All Devices)
+            Scan All (No Filter)
           </button>
         </div>
         <div id="scan-filters" class="filter-section">
@@ -64,6 +65,14 @@
       <div class="card" id="compatibility-card">
         <h2>Browser Compatibility</h2>
         <div id="compat-status"></div>
+      </div>
+
+      <!-- Disclaimer Banner -->
+      <div class="card card-disclaimer">
+        <p class="disclaimer-text">
+          For personal testing, education, and managing your own devices only.
+          Not for unauthorized access to devices you do not own.
+        </p>
       </div>
     </section>
 
@@ -90,29 +99,82 @@
       </div>
     </section>
 
-    <!-- Announcements Tab -->
-    <section id="announcements" class="tab-content">
+    <!-- Audio Tab -->
+    <section id="audio" class="tab-content">
       <div class="card">
-        <h2>BLE Advertisement Capture</h2>
-        <p class="hint">Captures GATT service data and characteristic values from connected devices for analysis and replay testing.</p>
-        <button id="btn-capture" class="btn btn-primary" disabled>
-          Capture from Connected Device
+        <h2>Audio Test Tools</h2>
+        <p class="hint">Play DTMF/fax tones for Bluetooth audio testing. Stop audio or disconnect speakers from here.</p>
+        <div class="audio-controls">
+          <button id="btn-play-dtmf" class="btn btn-primary btn-large">
+            Play DTMF Tones (Live)
+          </button>
+          <button id="btn-play-file" class="btn btn-secondary">
+            Play Audio File
+          </button>
+          <button id="btn-stop-audio" class="btn btn-danger btn-large">
+            Stop All Audio
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Stop Music / Silence Speakers</h2>
+        <p class="hint">Disconnect BLE devices to silence connected Bluetooth speakers. Stops all audio from this app.</p>
+        <button id="btn-silence-all" class="btn btn-danger btn-large">
+          Silence All — Disconnect Devices
         </button>
       </div>
-      <div id="captured-list" class="device-list">
-        <div class="empty-state">No captured data yet. Connect to a device first.</div>
+
+      <div class="card">
+        <h2>Share via AirDrop</h2>
+        <p class="hint">Share audio file, link, or random hearts to nearby devices via the iOS share sheet (AirDrop).</p>
+        <div class="share-controls">
+          <button id="btn-share-audio" class="btn btn-secondary">
+            Share DTMF Audio File
+          </button>
+          <button id="btn-share-hearts" class="btn btn-secondary">
+            Share Random Hearts
+          </button>
+          <button id="btn-share-link" class="btn btn-secondary">
+            Share App Link
+          </button>
+        </div>
       </div>
-      <div class="card" id="mimic-card" style="display:none;">
-        <h2>Replay / Mimic</h2>
-        <p class="hint">Write previously captured characteristic values back to a connected device for replay testing.</p>
-        <select id="mimic-select" class="input-field">
-          <option value="">Select captured profile...</option>
-        </select>
-        <button id="btn-mimic" class="btn btn-warning" disabled>
-          Replay Captured Data
-        </button>
-        <div id="mimic-status"></div>
+    </section>
+
+    <!-- Advanced / Agent Tab -->
+    <section id="advanced" class="tab-content">
+      <div class="card">
+        <h2>Agentic Auto-Discovery</h2>
+        <p class="hint">Automated BLE pipeline: scan, connect, enumerate, read, capture, and analyze — all in one tap. Agent runs each phase sequentially and reports findings in real-time.</p>
+        <div class="agent-controls">
+          <button id="btn-agent-full" class="btn btn-primary btn-large">
+            Run Full Discovery Agent
+          </button>
+          <button id="btn-agent-quick" class="btn btn-secondary">
+            Quick Scan Only
+          </button>
+          <button id="btn-agent-stop" class="btn btn-danger" disabled>
+            Stop Agent
+          </button>
+        </div>
       </div>
+
+      <div class="card" id="agent-status-card" style="display:none;">
+        <h2>Agent Status</h2>
+        <div id="agent-state-badge" class="agent-badge">idle</div>
+        <div id="agent-feed" class="agent-feed"></div>
+      </div>
+
+      <div class="card" id="agent-results-card" style="display:none;">
+        <h2>Discovery Results</h2>
+        <div id="agent-results"></div>
+      </div>
+    </section>
+
+    <!-- Announcements Tab (hidden, accessed from device detail or advanced) -->
+    <section id="announcements" class="tab-content" style="display:none;">
+      <!-- Capture/replay functionality is accessed via device detail and agent -->
     </section>
 
     <!-- Log Tab -->
@@ -129,13 +191,17 @@
       <div id="log-output" class="log-output"></div>
     </section>
 
-    <!-- Rick Roll Overlay -->
-    <div id="rickroll-overlay" class="overlay hidden">
+    <!-- Audio Overlay -->
+    <div id="audio-overlay" class="overlay hidden">
       <div class="overlay-content">
-        <h2>Device Connected Successfully!</h2>
-        <p>Initiating vulnerability test sequence...</p>
-        <div id="rickroll-container"></div>
-        <button id="btn-close-rickroll" class="btn btn-secondary">Close</button>
+        <h2>DTMF Test Tones</h2>
+        <p id="audio-overlay-message">Playing fax/DTMF tone sequence...</p>
+        <div class="audio-visualizer" id="audio-visualizer">
+          <div class="viz-bar"></div><div class="viz-bar"></div><div class="viz-bar"></div>
+          <div class="viz-bar"></div><div class="viz-bar"></div><div class="viz-bar"></div>
+          <div class="viz-bar"></div><div class="viz-bar"></div>
+        </div>
+        <button id="btn-close-audio-overlay" class="btn btn-secondary">Close</button>
       </div>
     </div>
   </div>
@@ -143,7 +209,9 @@
   <script src="js/logger.js"></script>
   <script src="js/bluetooth-scanner.js"></script>
   <script src="js/announcements.js"></script>
-  <script src="js/rickroll.js"></script>
+  <script src="js/audio-player.js"></script>
+  <script src="js/advanced.js"></script>
+  <script src="js/sharing.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
