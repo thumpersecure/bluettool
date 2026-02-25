@@ -1070,8 +1070,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('btn-back-devices')?.addEventListener('click', () => {
-    document.getElementById('device-detail')?.classList.add('hidden');
+  $('btn-back-devices')?.addEventListener('click', () => {
+    $('device-detail')?.classList.add('hidden');
   });
 
   // --- Captures / Replay (Replay tab) ---
@@ -1195,17 +1195,17 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Invalid characters. Use only 0-9, *, #, A-D', 'error');
       return;
     }
-    const speedEl = document.getElementById('dtmf-speed');
+    const speedEl = $('dtmf-speed');
     const speed = speedEl ? parseFloat(speedEl.value) || 1 : 1;
     AudioPlayer.playCustomDTMFSequence(seq, speed);
     showAudioOverlay();
   });
 
-  document.getElementById('btn-play-file')?.addEventListener('click', () => {
+  $('btn-play-file')?.addEventListener('click', () => {
     if (typeof AudioPlayer !== 'undefined') AudioPlayer.playFile();
   });
 
-  document.getElementById('btn-stop-audio')?.addEventListener('click', () => {
+  $('btn-stop-audio')?.addEventListener('click', () => {
     if (typeof AudioPlayer !== 'undefined') AudioPlayer.stopAll();
     showToast('Audio stopped', 'info');
   });
@@ -1277,17 +1277,17 @@ document.addEventListener('DOMContentLoaded', () => {
     await BluetoothScanner.writeCharacteristic(targetChar, colorHex);
   }
 
-  document.getElementById('btn-flash-all-lights')?.addEventListener('click', async () => {
+  $('btn-flash-all-lights')?.addEventListener('click', async () => {
     await runLightActionOnAllDevices('flash');
   });
 
-  document.getElementById('btn-off-all-lights')?.addEventListener('click', async () => {
+  $('btn-off-all-lights')?.addEventListener('click', async () => {
     await runLightActionOnAllDevices('off');
   });
 
-  document.getElementById('btn-set-color-all-lights')?.addEventListener('click', async () => {
-    const hexInput = document.getElementById('light-color-hex');
-    const picker = document.getElementById('light-color-picker');
+  $('btn-set-color-all-lights')?.addEventListener('click', async () => {
+    const hexInput = $('light-color-hex');
+    const picker = $('light-color-picker');
     const hex = (hexInput?.value || picker?.value || '#ff0000').trim();
     if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
       showToast('Enter valid hex color (e.g. #ff0000)', 'error');
@@ -1296,8 +1296,8 @@ document.addEventListener('DOMContentLoaded', () => {
     await runLightActionOnAllDevices('color', hex);
   });
 
-  const lightColorPicker = document.getElementById('light-color-picker');
-  const lightColorHex = document.getElementById('light-color-hex');
+  const lightColorPicker = $('light-color-picker');
+  const lightColorHex = $('light-color-hex');
   lightColorPicker?.addEventListener('input', () => {
     if (lightColorHex) lightColorHex.value = lightColorPicker.value;
   });
@@ -1308,7 +1308,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('btn-silence-all')?.addEventListener('click', async () => {
+  $('btn-silence-all')?.addEventListener('click', async () => {
     const devices = BluetoothScanner.getDevices();
     const connCount = devices.filter(d => d.connected).length;
     if (connCount > 0) {
@@ -1329,17 +1329,17 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Sharing ---
-  document.getElementById('btn-share-audio')?.addEventListener('click', async () => {
+  $('btn-share-audio')?.addEventListener('click', async () => {
     const ok = await Sharing.shareAudioFile();
     showToast(ok ? 'Audio shared' : 'Audio downloaded (share not available)', ok ? 'success' : 'info');
   });
 
-  document.getElementById('btn-share-hearts')?.addEventListener('click', async () => {
+  $('btn-share-hearts')?.addEventListener('click', async () => {
     const ok = await Sharing.shareHearts();
     showToast(ok ? 'Hearts shared' : 'Hearts copied to clipboard', ok ? 'success' : 'info');
   });
 
-  document.getElementById('btn-share-link')?.addEventListener('click', async () => {
+  $('btn-share-link')?.addEventListener('click', async () => {
     const ok = await Sharing.shareLink(
       'https://thumpersecure.github.io/bluettool/',
       'BlueTTool',
@@ -1513,19 +1513,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  document.getElementById('btn-add-macro')?.addEventListener('click', () => {
-    const form = document.getElementById('macro-form');
-    const nameInput = document.getElementById('macro-name-input');
+  $('btn-add-macro')?.addEventListener('click', () => {
+    const form = $('macro-form');
+    const nameInput = $('macro-name-input');
     if (form && nameInput) {
       nameInput.value = '';
       nameInput.placeholder = 'Macro name (e.g. Quick Light Test)';
-      document.getElementById('macro-steps-preview').textContent = 'Preset: delay → flash → delay → off';
+      $('macro-steps-preview').textContent = 'Preset: delay → flash → delay → off';
       form.classList.remove('hidden');
     }
   });
 
-  document.getElementById('btn-save-macro')?.addEventListener('click', () => {
-    const nameInput = document.getElementById('macro-name-input');
+  $('btn-save-macro')?.addEventListener('click', () => {
+    const nameInput = $('macro-name-input');
     const name = (nameInput?.value || '').trim() || 'Quick Light Test';
     const steps = [
       { type: 'delay', ms: 500 },
@@ -1534,28 +1534,28 @@ document.addEventListener('DOMContentLoaded', () => {
       { type: 'light_off', deviceId: 'all' }
     ];
     Macros.createMacro(name, steps);
-    document.getElementById('macro-form')?.classList.add('hidden');
+    $('macro-form')?.classList.add('hidden');
     renderMacros();
     showToast(`Macro "${name}" created`, 'success');
   });
 
-  document.getElementById('btn-cancel-macro')?.addEventListener('click', () => {
-    document.getElementById('macro-form')?.classList.add('hidden');
+  $('btn-cancel-macro')?.addEventListener('click', () => {
+    $('macro-form')?.classList.add('hidden');
   });
 
   renderMacros();
 
   // --- Audio Overlay ---
   function showAudioOverlay() {
-    const overlay = document.getElementById('audio-overlay');
+    const overlay = $('audio-overlay');
     if (overlay) {
       overlay.classList.remove('hidden');
       overlay.setAttribute('aria-hidden', 'false');
     }
   }
 
-  document.getElementById('btn-close-audio-overlay')?.addEventListener('click', () => {
-    const overlay = document.getElementById('audio-overlay');
+  $('btn-close-audio-overlay')?.addEventListener('click', () => {
+    const overlay = $('audio-overlay');
     if (overlay) {
       overlay.classList.add('hidden');
       overlay.setAttribute('aria-hidden', 'true');
@@ -1564,19 +1564,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Advanced / Agent Tab ---
-  const agentStatusCard = document.getElementById('agent-status-card');
-  const agentResultsCard = document.getElementById('agent-results-card');
-  const agentFeed = document.getElementById('agent-feed');
-  const agentBadge = document.getElementById('agent-state-badge');
-  const agentResultsEl = document.getElementById('agent-results');
-  const btnAgentStop = document.getElementById('btn-agent-stop');
-  const btnAgentFull = document.getElementById('btn-agent-full');
-  const btnAgentQuick = document.getElementById('btn-agent-quick');
-  const btnAgentParallel = document.getElementById('btn-agent-parallel');
-  const btnAgentStopAll = document.getElementById('btn-agent-stop-all');
-  const parallelStatusCard = document.getElementById('parallel-status-card');
-  const parallelDeviceCount = document.getElementById('parallel-device-count');
-  const aggregateResultsCard = document.getElementById('aggregate-results-card');
+  const agentStatusCard = $('agent-status-card');
+  const agentResultsCard = $('agent-results-card');
+  const agentFeed = $('agent-feed');
+  const agentBadge = $('agent-state-badge');
+  const agentResultsEl = $('agent-results');
+  const btnAgentStop = $('btn-agent-stop');
+  const btnAgentFull = $('btn-agent-full');
+  const btnAgentQuick = $('btn-agent-quick');
+  const btnAgentParallel = $('btn-agent-parallel');
+  const btnAgentStopAll = $('btn-agent-stop-all');
+  const parallelStatusCard = $('parallel-status-card');
+  const parallelDeviceCount = $('parallel-device-count');
+  const aggregateResultsCard = $('aggregate-results-card');
 
   function updateParallelDeviceCount() {
     const allDevices = BluetoothScanner.getDevices();
@@ -1596,7 +1596,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderAgentPoolList() {
-    const poolList = document.getElementById('agent-pool-list');
+    const poolList = $('agent-pool-list');
     if (!poolList) return;
     const agentList = Advanced.getAgents();
     if (agentList.length === 0) {
@@ -1627,9 +1627,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
 
     const counts = Advanced.getAgentCount();
-    const runningEl = document.getElementById('parallel-running');
-    const completedEl = document.getElementById('parallel-completed');
-    const totalEl = document.getElementById('parallel-total');
+    const runningEl = $('parallel-running');
+    const completedEl = $('parallel-completed');
+    const totalEl = $('parallel-total');
     if (runningEl) runningEl.textContent = `${counts.running} running`;
     if (completedEl) completedEl.textContent = `${counts.completed} done`;
     if (totalEl) totalEl.textContent = `${counts.total} total`;
@@ -1686,7 +1686,7 @@ document.addEventListener('DOMContentLoaded', () => {
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
     aggregateResultsCard.style.display = 'none';
-    document.getElementById('vuln-report-card').style.display = 'none';
+    $('vuln-report-card').style.display = 'none';
     await Advanced.runFullDiscovery();
     renderDeviceList();
     updateAgentButtons();
@@ -1696,7 +1696,7 @@ document.addEventListener('DOMContentLoaded', () => {
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
     aggregateResultsCard.style.display = 'none';
-    document.getElementById('vuln-report-card').style.display = 'none';
+    $('vuln-report-card').style.display = 'none';
     await Advanced.quickScan();
     renderDeviceList();
     updateAgentButtons();
@@ -1706,7 +1706,7 @@ document.addEventListener('DOMContentLoaded', () => {
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
     aggregateResultsCard.style.display = 'none';
-    document.getElementById('vuln-report-card').style.display = 'none';
+    $('vuln-report-card').style.display = 'none';
     parallelStatusCard.style.display = 'none';
     Advanced.clearAgents();
     updateAgentButtons();
@@ -1725,7 +1725,7 @@ document.addEventListener('DOMContentLoaded', () => {
     agentResultsCard.style.display = 'none';
     aggregateResultsCard.style.display = 'none';
     parallelStatusCard.style.display = 'none';
-    document.getElementById('vuln-report-card').style.display = 'none';
+    $('vuln-report-card').style.display = 'none';
     agentBadge.textContent = 'idle';
     agentBadge.className = 'agent-badge agent-idle';
     btnAgentStop.disabled = true;
@@ -1743,7 +1743,7 @@ document.addEventListener('DOMContentLoaded', () => {
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
     aggregateResultsCard.style.display = 'none';
-    document.getElementById('vuln-report-card').style.display = 'none';
+    $('vuln-report-card').style.display = 'none';
     agentBadge.textContent = 'idle';
     agentBadge.className = 'agent-badge agent-idle';
     updateAgentButtons();
@@ -1754,8 +1754,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!aggregate) return;
     aggregateResultsCard.style.display = 'block';
 
-    const statsEl = document.getElementById('aggregate-stats');
-    const resultsEl = document.getElementById('aggregate-results');
+    const statsEl = $('aggregate-stats');
+    const resultsEl = $('aggregate-results');
 
     statsEl.innerHTML = [
       `Devices: ${aggregate.totalDevices}`,
@@ -1864,11 +1864,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderVulnReport(report) {
-    const card = document.getElementById('vuln-report-card');
+    const card = $('vuln-report-card');
     card.style.display = 'block';
 
     // Score banner
-    const banner = document.getElementById('vuln-score-banner');
+    const banner = $('vuln-score-banner');
     const riskClass = 'vuln-risk-' + report.riskLevel.toLowerCase();
     banner.className = 'vuln-score-banner ' + riskClass;
     banner.innerHTML = `
@@ -1880,7 +1880,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
 
     // Stats
-    const statsEl = document.getElementById('vuln-stats');
+    const statsEl = $('vuln-stats');
     statsEl.innerHTML = [
       `Readable: ${report.stats.totalReadable}`,
       `Writable: ${report.stats.totalWritable}`,
@@ -1890,7 +1890,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ].map(s => `<span class="vuln-stat">${s}</span>`).join('');
 
     // Findings
-    const findingsEl = document.getElementById('vuln-findings');
+    const findingsEl = $('vuln-findings');
     if (report.findings.length === 0) {
       findingsEl.innerHTML = '<div style="font-size:12px;color:var(--text-hint);text-align:center;padding:12px;">No vulnerability findings</div>';
     } else {
@@ -1907,7 +1907,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Recommendations
-    const recsEl = document.getElementById('vuln-recommendations');
+    const recsEl = $('vuln-recommendations');
     recsEl.innerHTML = '<h3>Recommendations</h3>' +
       report.recommendations.map(r => `
         <div class="vuln-rec">
@@ -1918,11 +1918,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Calls Tab ---
-  const callImportInput = document.getElementById('call-import-input');
-  const btnImportCalls = document.getElementById('btn-import-calls');
-  const btnExportCalls = document.getElementById('btn-export-calls');
-  const btnClearCalls = document.getElementById('btn-clear-calls');
-  const callList = document.getElementById('call-list');
+  const callImportInput = $('call-import-input');
+  const btnImportCalls = $('btn-import-calls');
+  const btnExportCalls = $('btn-export-calls');
+  const btnClearCalls = $('btn-clear-calls');
+  const callList = $('call-list');
 
   btnImportCalls?.addEventListener('click', () => callImportInput?.click());
 
@@ -1994,63 +1994,63 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.settings-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const panelId = 'panel-' + btn.dataset.toggle;
-      const panel = document.getElementById(panelId);
+      const panel = $(panelId);
       const expanded = btn.getAttribute('aria-expanded') === 'true';
       btn.setAttribute('aria-expanded', !expanded);
       panel?.classList.toggle('open', !expanded);
     });
   });
 
-  document.getElementById('setting-theme-dark')?.addEventListener('change', () => {
+  $('setting-theme-dark')?.addEventListener('change', () => {
     const s = getCurrentSettings();
-    s.themeDark = document.getElementById('setting-theme-dark').checked;
+    s.themeDark = $('setting-theme-dark').checked;
     saveSettings(s);
     applySettings(s);
     showToast(s.themeDark ? 'Dark theme' : 'Light theme', 'info');
   });
 
-  document.getElementById('setting-persist-volume')?.addEventListener('change', () => {
+  $('setting-persist-volume')?.addEventListener('change', () => {
     const s = getCurrentSettings();
     saveSettings(s);
   });
 
-  document.getElementById('setting-scan-timeout')?.addEventListener('change', () => {
+  $('setting-scan-timeout')?.addEventListener('change', () => {
     const s = getCurrentSettings();
     saveSettings(s);
-    const scanDurationHint = document.getElementById('scan-duration-hint');
-    if (scanDurationHint) scanDurationHint.value = document.getElementById('setting-scan-timeout').value;
+    const scanDurationHint = $('scan-duration-hint');
+    if (scanDurationHint) scanDurationHint.value = $('setting-scan-timeout').value;
   });
 
-  document.getElementById('setting-default-sort')?.addEventListener('change', () => {
+  $('setting-default-sort')?.addEventListener('change', () => {
     const s = getCurrentSettings();
     saveSettings(s);
-    const deviceSort = document.getElementById('device-sort');
+    const deviceSort = $('device-sort');
     if (deviceSort) {
-      deviceSort.value = document.getElementById('setting-default-sort').value;
+      deviceSort.value = $('setting-default-sort').value;
       renderDeviceList();
     }
   });
 
-  document.getElementById('setting-default-filter')?.addEventListener('change', () => {
+  $('setting-default-filter')?.addEventListener('change', () => {
     const s = getCurrentSettings();
     saveSettings(s);
-    const deviceFilter = document.getElementById('device-filter');
+    const deviceFilter = $('device-filter');
     if (deviceFilter) {
-      deviceFilter.value = document.getElementById('setting-default-filter').value;
+      deviceFilter.value = $('setting-default-filter').value;
       renderDeviceList();
     }
   });
 
-  document.getElementById('scan-duration-hint')?.addEventListener('change', () => {
-    const val = document.getElementById('scan-duration-hint').value;
-    const settingScanTimeout = document.getElementById('setting-scan-timeout');
+  $('scan-duration-hint')?.addEventListener('change', () => {
+    const val = $('scan-duration-hint')?.value;
+    const settingScanTimeout = $('setting-scan-timeout');
     if (settingScanTimeout) settingScanTimeout.value = val;
     const s = getCurrentSettings();
     s.scanTimeout = parseInt(val, 10);
     saveSettings(s);
   });
 
-  document.getElementById('btn-reset-settings')?.addEventListener('click', async () => {
+  $('btn-reset-settings')?.addEventListener('click', async () => {
     const confirmed = await showConfirm('Reset Settings', 'Restore all settings to defaults?');
     if (!confirmed) return;
     saveSettings(DEFAULT_SETTINGS);
@@ -2060,12 +2060,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Log Tab ---
-  document.getElementById('btn-copy-log')?.addEventListener('click', () => {
+  $('btn-copy-log')?.addEventListener('click', () => {
     Logger.copyToClipboard();
     showToast('Log copied to clipboard', 'success');
   });
 
-  document.getElementById('btn-clear-log')?.addEventListener('click', async () => {
+  $('btn-clear-log')?.addEventListener('click', async () => {
     const confirmed = await showConfirm('Clear Log', 'Clear all log entries?');
     if (!confirmed) return;
     Logger.clear();

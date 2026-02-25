@@ -103,8 +103,11 @@ const BluetoothScanner = (() => {
     return results;
   }
 
+  let _compatStatusEl = null;
+  let _compatMatrixEl = null;
   function renderCompatibility(results) {
-    const container = document.getElementById('compat-status');
+    if (!_compatStatusEl) _compatStatusEl = document.getElementById('compat-status');
+    const container = _compatStatusEl;
     if (!container) return;
     container.innerHTML = results.map(r => {
       const cls = r.ok === true ? 'compat-ok' : r.ok === false ? 'compat-fail' : 'compat-warn';
@@ -117,7 +120,8 @@ const BluetoothScanner = (() => {
   }
 
   function renderCompatMatrix() {
-    const container = document.getElementById('compat-matrix');
+    if (!_compatMatrixEl) _compatMatrixEl = document.getElementById('compat-matrix');
+    const container = _compatMatrixEl;
     if (!container || typeof BrowserCompat === 'undefined') return;
 
     const matrix = BrowserCompat.getFeatureMatrix();
