@@ -28,8 +28,7 @@ const Announcements = (() => {
    * @param {boolean} [options.reRead=true] - if true, re-read readable characteristics during capture
    */
   async function captureFromDeviceId(deviceId, options = {}) {
-    const deviceInfo = BluetoothScanner.getDevice(deviceId) ||
-      BluetoothScanner.getDevices().find(d => d.id === deviceId);
+    const deviceInfo = BluetoothScanner.getDevice(deviceId);
     if (!deviceInfo || !deviceInfo.connected) {
       Logger.error('Device not connected - connect to a device first');
       throw new Error('No device connected');
@@ -117,20 +116,7 @@ const Announcements = (() => {
       throw new Error('No device connected');
     }
 
-    const normalizeUuid = (uuid) => {
-      const raw = String(uuid || '').toLowerCase();
-      if (typeof BluetoothUUID !== 'undefined' && typeof BluetoothUUID.canonicalUUID === 'function') {
-        try {
-          return BluetoothUUID.canonicalUUID(raw);
-        } catch (_) {
-          // Fall through to local normalization
-        }
-      }
-      if (/^[0-9a-f]{4}$/.test(raw)) {
-        return `0000${raw}-0000-1000-8000-00805f9b34fb`;
-      }
-      return raw;
-    };
+    const normalizeUuid = BluetoothScanner.normalizeUuid;
     const capturedServices = new Set(profile.services.map(s => normalizeUuid(s.uuid)));
     const connectedServices = new Set((deviceInfo.services || []).map(s => normalizeUuid(s.uuid)));
     let sharedServiceCount = 0;
@@ -238,6 +224,67 @@ const Announcements = (() => {
     Logger.success('Capture profile exported as JSON');
   }
 
+  /**
+   * Import capture profile(s) from a JSON file.
+   * Accepts single capture object or array of captures.
+   * @param {File} file - JSON file from export or compatible format
+   * @returns {number} Number of profiles imported
+   */
+  async function importCapture(file) {
+    const text = await file.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      Logger.error('Invalid JSON in import file');
+      throw new Error('Invalid JSON file');
+    }
+
+    const items = Array.isArray(data) ? data : [data];
+    let imported = 0;
+
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      if (!item.services || !Array.isArray(item.services)) {
+        Logger.warn('Skipping item: missing services array');
+        continue;
+      }
+
+      const profile = {
+        id: `capture-${Date.now()}-${imported}`,
+        deviceName: item.deviceName || item.name || 'Imported',
+        deviceId: item.deviceId || item.id || '',
+        timestamp: item.timestamp || new Date().toISOString(),
+        services: item.services.map(s => ({
+          uuid: s.uuid,
+          name: s.name || s.uuid,
+          characteristics: (s.characteristics || []).map(c => ({
+            uuid: c.uuid,
+            name: c.name || c.uuid,
+            properties: Array.isArray(c.properties) ? c.properties : [],
+            value: c.value ?? null,
+            textValue: c.textValue ?? null
+          }))
+        })),
+        totalChars: 0,
+        readableChars: 0
+      };
+
+      for (const svc of profile.services) {
+        for (const ch of svc.characteristics) {
+          profile.totalChars++;
+          if (ch.value) profile.readableChars++;
+        }
+      }
+
+      captures.push(profile);
+      imported++;
+      Logger.success(`Imported profile: ${profile.deviceName}`);
+    }
+
+    return imported;
+  }
+
   function getCaptures() {
     return [...captures];
   }
@@ -252,6 +299,7 @@ const Announcements = (() => {
     captureFromDeviceId,
     replayToDevice,
     exportCapture,
+    importCapture,
     getCaptures,
     clearCaptures
   };

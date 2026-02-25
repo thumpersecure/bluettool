@@ -57,6 +57,7 @@ const AudioPlayer = (() => {
       fileAudioEl.currentTime = 0;
     }
     isPlaying = false;
+    stopRequested = false;
     Logger.info('Audio stopped');
   }
 
@@ -118,41 +119,82 @@ const AudioPlayer = (() => {
   }
 
   /**
-   * Play a live-generated DTMF/fax sequence using Web Audio API.
+   * Valid DTMF characters: 0-9, *, #, A-D
    */
-  async function playDTMFSequence() {
+  const VALID_DTMF = /^[0-9*#A-Da-d]*$/;
+
+  /**
+   * Play a custom DTMF sequence. Only plays valid DTMF digits; others are skipped.
+   * @param {string} sequence - User-provided sequence (e.g. "123#*456")
+   * @param {number} [speed=1] - Playback speed multiplier
+   */
+  async function playCustomDTMFSequence(sequence, speed = 1) {
+    if (isPlaying) return;
+    const seq = String(sequence || '').trim();
+    if (!seq) return;
+    isPlaying = true;
+    stopRequested = false;
+    const spd = Math.max(0.25, Math.min(4, Number(speed) || 1));
+    Logger.info(`Playing custom DTMF: "${seq}" (${spd}x)...`);
+
+    const scaledWait = (ms) => wait(Math.round(ms / spd));
+    const scaledDuration = (d) => d / spd;
+
+    try {
+      for (const digit of seq) {
+        if (stopRequested) break;
+        const upper = digit.toUpperCase();
+        const freqs = DTMF_FREQS[upper];
+        if (freqs) {
+          await playTone(freqs[0], freqs[1], scaledDuration(0.1), 0.35);
+          await scaledWait(50);
+        }
+      }
+      if (!stopRequested) Logger.success('Custom DTMF sequence complete');
+    } catch (err) {
+      if (!stopRequested) Logger.error('Audio playback error: ' + err.message);
+    } finally {
+      isPlaying = false;
+    }
+  }
+
+  /**
+   * Play a live-generated DTMF/fax sequence using Web Audio API.
+   * @param {number} [speed=1] - Playback speed multiplier (0.5 = half speed, 2 = double speed)
+   */
+  async function playDTMFSequence(speed = 1) {
     if (isPlaying) return;
     isPlaying = true;
     stopRequested = false;
-    Logger.info('Playing DTMF/fax tone sequence...');
+    const spd = Math.max(0.25, Math.min(4, Number(speed) || 1));
+    Logger.info(`Playing DTMF/fax tone sequence (${spd}x)...`);
+
+    const scaledWait = (ms) => wait(Math.round(ms / spd));
+    const scaledDuration = (d) => d / spd;
 
     try {
-      // CNG tones (calling fax)
       for (let i = 0; i < 3 && !stopRequested; i++) {
-        await playTone(CNG_FREQ, CNG_FREQ, 0.5, 0.35);
-        await wait(200);
+        await playTone(CNG_FREQ, CNG_FREQ, scaledDuration(0.5), 0.35);
+        await scaledWait(200);
       }
 
-      // CED tone (answer)
-      if (!stopRequested) await playTone(CED_FREQ, CED_FREQ, 1.5, 0.3);
-      await wait(200);
+      if (!stopRequested) await playTone(CED_FREQ, CED_FREQ, scaledDuration(1.5), 0.3);
+      await scaledWait(200);
 
-      // DTMF digit sequence
       const sequence = '18005550192#*55512340987#';
       for (const digit of sequence) {
         if (stopRequested) break;
         const freqs = DTMF_FREQS[digit];
         if (freqs) {
-          await playTone(freqs[0], freqs[1], 0.1, 0.35);
-          await wait(50);
+          await playTone(freqs[0], freqs[1], scaledDuration(0.1), 0.35);
+          await scaledWait(50);
         }
       }
 
-      await wait(200);
+      await scaledWait(200);
 
-      // Final modem-like tones
-      if (!stopRequested) await playTone(1650, 1850, 1.0, 0.25);
-      if (!stopRequested) await playTone(CED_FREQ, CED_FREQ, 0.5, 0.25);
+      if (!stopRequested) await playTone(1650, 1850, scaledDuration(1.0), 0.25);
+      if (!stopRequested) await playTone(CED_FREQ, CED_FREQ, scaledDuration(0.5), 0.25);
 
       if (!stopRequested) Logger.success('DTMF sequence complete');
     } catch (err) {
@@ -178,18 +220,20 @@ const AudioPlayer = (() => {
 
     fileAudioEl.volume = masterVolume;
     fileAudioEl.currentTime = 0;
-    fileAudioEl.play().then(() => {
-      Logger.success('Audio file playback started');
-    }).catch(err => {
-      Logger.error('Could not play audio file: ' + err.message + ' — using live DTMF instead');
-      isPlaying = false;
-      playDTMFSequence();
-    });
-
     fileAudioEl.onended = () => {
       isPlaying = false;
       Logger.info('Audio file playback ended');
     };
+
+    fileAudioEl.play().then(() => {
+      if (!stopRequested) Logger.success('Audio file playback started');
+    }).catch(err => {
+      isPlaying = false;
+      if (!stopRequested) {
+        Logger.error('Could not play audio file: ' + err.message + ' — using live DTMF instead');
+        playDTMFSequence();
+      }
+    });
   }
 
   /**
@@ -221,6 +265,7 @@ const AudioPlayer = (() => {
 
   return {
     playDTMFSequence,
+    playCustomDTMFSequence,
     playFile,
     stopAll,
     getAudioBlob,
