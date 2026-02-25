@@ -591,7 +591,16 @@ document.addEventListener('DOMContentLoaded', () => {
     return sorted;
   }
 
+  let renderDeviceListRaf = null;
   function renderDeviceList() {
+    if (renderDeviceListRaf) return;
+    renderDeviceListRaf = requestAnimationFrame(() => {
+      renderDeviceListRaf = null;
+      renderDeviceListImmediate();
+    });
+  }
+
+  function renderDeviceListImmediate() {
     const list = $('device-list');
     if (!list) return;
     const allDevices = BluetoothScanner.getDevices();
@@ -622,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const resetBtn = list.querySelector('#empty-cta-reset-filter');
       if (resetBtn) {
         resetBtn.addEventListener('click', () => {
-          const filterEl = document.getElementById('device-filter');
+          const filterEl = $('device-filter');
           if (filterEl) { filterEl.value = 'all'; renderDeviceList(); }
         });
       }
