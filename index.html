@@ -54,12 +54,19 @@
     <section id="scanner" class="tab-content active" role="tabpanel" aria-labelledby="tab-scanner">
       <div id="quick-reconnect-card" class="card quick-reconnect-card hidden">
         <h2>Quick Reconnect</h2>
-        <p class="hint">Reconnect to your last used device.</p>
+        <p class="hint">Reconnect to your last used device with one tap.</p>
         <button id="btn-quick-reconnect" class="btn btn-primary btn-large">Reconnect to <span id="quick-reconnect-name">Device</span></button>
       </div>
       <div class="card">
         <h2>BLE Device Scanner</h2>
-        <p class="hint">Scans for nearby BLE devices via Web Bluetooth in Bluefy. Tap to open device chooser.</p>
+        <p class="hint">Discover nearby Bluetooth Low Energy devices. Uses Web Bluetooth — works in Bluefy on iOS.</p>
+        <div class="section-desc">
+          <strong>Options:</strong>
+          <ul>
+            <li><strong>Scan for Devices</strong> — Uses name/service filters below. Best when you know the device type.</li>
+            <li><strong>Scan All (No Filter)</strong> — Shows all nearby BLE devices. Use for broad discovery.</li>
+          </ul>
+        </div>
         <div class="scan-controls">
           <button id="btn-scan" class="btn btn-primary btn-large" aria-label="Scan for BLE devices">
             Scan for Devices
@@ -79,6 +86,7 @@
         </div>
         <div id="scan-options" class="filter-section">
           <h3>Scan Options</h3>
+          <p class="hint">Control how the device picker behaves. These are hints — the browser may ignore them.</p>
           <label class="toggle-label">
             <span>Scan duration hint (seconds)</span>
           </label>
@@ -89,10 +97,10 @@
             <option value="15">15 seconds</option>
             <option value="30">30 seconds</option>
           </select>
-          <p class="hint hint-spaced">Hint for how long to show device picker. Actual behavior depends on browser.</p>
         </div>
         <div id="scan-filters" class="filter-section">
           <h3>Scan Filters</h3>
+          <p class="hint">Narrow results before the picker opens. Leave name prefix blank to scan broadly.</p>
           <label class="toggle-label">
             <input type="checkbox" id="filter-name" checked>
             <span>Filter by name prefix</span>
@@ -108,6 +116,7 @@
 
       <div class="card" id="compatibility-card">
         <h2>Browser Compatibility</h2>
+        <p class="hint">BLE works in Bluefy on iOS. Classic Bluetooth needs Chrome 117+ on desktop.</p>
         <div id="compat-status"></div>
         <div id="compat-matrix" class="compat-matrix"></div>
         <p class="compat-help-link">
@@ -138,7 +147,20 @@
     <section id="devices" class="tab-content" role="tabpanel" aria-labelledby="tab-devices">
       <div class="card">
         <div class="device-list-header">
-          <h2>Discovered Devices</h2>
+          <div class="device-list-header-top">
+            <h2>Discovered Devices</h2>
+            <p class="hint">Tap a device to connect and view its GATT profile. Pin favorites to keep them at the top.</p>
+            <div class="section-desc">
+              <strong>List controls:</strong>
+              <ul>
+                <li><strong>Refresh</strong> — Redraw the list (sort/filter unchanged)</li>
+                <li><strong>Sort</strong> — Newest, Oldest, or Name A–Z / Z–A</li>
+                <li><strong>Filter</strong> — All, Connected only, or Available only</li>
+                <li><strong>Clear All</strong> — Remove all devices (disconnects first)</li>
+                <li><strong>Export CSV</strong> — Save device list for backup or analysis</li>
+              </ul>
+            </div>
+          </div>
           <div class="device-actions device-actions-wrap">
             <button id="btn-refresh-devices" class="btn btn-secondary btn-small" title="Refresh list">&#8635; Refresh</button>
             <select id="device-sort" class="input-select-small">
@@ -180,7 +202,18 @@
     <section id="tools" class="tab-content" role="tabpanel" aria-labelledby="tab-tools">
       <div class="card">
         <h2>🔊 Sound</h2>
-        <p class="hint">DTMF/fax tones for Bluetooth audio testing. Adjust speed and volume.</p>
+        <p class="hint">Test Bluetooth speakers and audio paths with DTMF (phone keypad) tones.</p>
+        <div class="section-desc">
+          <strong>Options:</strong>
+          <ul>
+            <li><strong>Play DTMF Tones (Live)</strong> — Built-in sequence: fax tones + digits. Uses Web Audio.</li>
+            <li><strong>Play Audio File</strong> — Pre-generated WAV. Falls back to live if file missing.</li>
+            <li><strong>Stop All Audio</strong> — Stops playback immediately.</li>
+            <li><strong>Volume</strong> — Master level (0–100%). Saved if “Persist volume” is on in Settings.</li>
+            <li><strong>DTMF Speed</strong> — 0.5x to 2x. Slower helps debug; faster for quick tests.</li>
+            <li><strong>Custom Sequence</strong> — Type your own: 0-9, *, #, A-D (e.g. 123#*456).</li>
+          </ul>
+        </div>
         <div class="audio-controls">
           <button id="btn-play-dtmf" class="btn btn-primary btn-large">
             Play DTMF Tones (Live)
@@ -218,7 +251,15 @@
 
       <div class="card">
         <h2>💡 Lights</h2>
-        <p class="hint">Control connected smart lights (Govee, etc.). Connect devices first in Devices tab.</p>
+        <p class="hint">Control BLE smart lights (Govee, generic RGB). Connect lights in Devices tab first.</p>
+        <div class="section-desc">
+          <strong>Options:</strong>
+          <ul>
+            <li><strong>Flash All Lights</strong> — Brief on/off pulse on all connected lights.</li>
+            <li><strong>Turn Off All Lights</strong> — Set all connected lights to off.</li>
+            <li><strong>Set Color on All Lights</strong> — Pick a color (picker or hex) and apply to all RGB-capable lights.</li>
+          </ul>
+        </div>
         <div class="light-tools-actions">
           <button id="btn-flash-all-lights" class="btn btn-warning btn-large">
             Flash All Lights
@@ -241,7 +282,10 @@
 
       <div class="card">
         <h2>🔇 Silence</h2>
-        <p class="hint">Disconnect BLE devices to silence connected Bluetooth speakers. Stops all audio from this app.</p>
+        <p class="hint">Stop audio and disconnect all BLE devices. Use when Bluetooth speakers won’t stop playing.</p>
+        <div class="section-desc">
+          <strong>What it does:</strong> Stops any DTMF/audio playback, then disconnects every device in the list. Devices remain in the list but show as available.
+        </div>
         <button id="btn-silence-all" class="btn btn-danger btn-large">
           Silence All &mdash; Disconnect Devices
         </button>
@@ -249,7 +293,15 @@
 
       <div class="card">
         <h2>Share via AirDrop</h2>
-        <p class="hint">Share audio file, link, or random hearts to nearby devices via the iOS share sheet.</p>
+        <p class="hint">Use the iOS share sheet to send files or links to nearby devices.</p>
+        <div class="section-desc">
+          <strong>Options:</strong>
+          <ul>
+            <li><strong>Share DTMF Audio File</strong> — Send the WAV file (or download if share unavailable).</li>
+            <li><strong>Share Random Hearts</strong> — Send a burst of heart emojis. Fun for testing.</li>
+            <li><strong>Share App Link</strong> — Share the BlueTTool URL so others can install it.</li>
+          </ul>
+        </div>
         <div class="share-controls">
           <button id="btn-share-audio" class="btn btn-secondary">
             Share DTMF Audio File
@@ -265,7 +317,10 @@
 
       <div class="card">
         <h2>⚡ Macros</h2>
-        <p class="hint">Automate sequences: flash lights, set color, replay capture, delays. Connect devices first, then run.</p>
+        <p class="hint">Chain actions into one-tap sequences: delays, light commands, replay, connect.</p>
+        <div class="section-desc">
+          <strong>Step types:</strong> <em>delay</em> (wait ms), <em>light_flash</em>, <em>light_off</em>, <em>light_color</em>, <em>replay</em> (capture), <em>connect_device</em>. Add steps, name the macro, then Run. Connect devices before running.
+        </div>
         <div id="macros-list" class="macros-list"></div>
         <div class="macros-actions">
           <button id="btn-add-macro" class="btn btn-primary">Add Macro</button>
@@ -285,7 +340,16 @@
     <section id="replay" class="tab-content" role="tabpanel" aria-labelledby="tab-replay">
       <div class="card">
         <h2>Captured Profiles</h2>
-        <p class="hint">Snapshots of GATT characteristic data. Capture from Devices tab, or import from JSON. Replay to a connected device.</p>
+        <p class="hint">Store and replay GATT characteristic snapshots. Useful for testing, backup, or cloning device state.</p>
+        <div class="section-desc">
+          <strong>Workflow:</strong>
+          <ul>
+            <li><strong>Capture</strong> — In Devices, connect to a device, open detail, tap “Capture Profile Snapshot”.</li>
+            <li><strong>Import</strong> — Load profiles from a JSON file (single object or array).</li>
+            <li><strong>Replay</strong> — Connect to a target device, select a capture, tap Replay. Writes matching characteristics.</li>
+            <li><strong>Export</strong> — Per capture: save as JSON for backup or sharing.</li>
+          </ul>
+        </div>
         <div class="replay-actions">
           <input type="file" id="capture-import-input" accept=".json,application/json" class="input-file-hidden">
           <button id="btn-import-captures" class="btn btn-secondary btn-small">Import JSON</button>
@@ -314,7 +378,16 @@
     <section id="calls" class="tab-content" role="tabpanel" aria-labelledby="tab-calls">
       <div class="card">
         <h2>Call History</h2>
-        <p class="hint">Import call history from your iPhone. Export from Settings &gt; Phone or use a call history backup app, then import the CSV/JSON file here.</p>
+        <p class="hint">View and manage call logs. Data is imported from a file — iPhone does not expose call history directly to web apps.</p>
+        <div class="section-desc">
+          <strong>Options:</strong>
+          <ul>
+            <li><strong>Import</strong> — Load CSV or JSON. Format: <code>date,number,duration,type</code> or JSON array of objects.</li>
+            <li><strong>Export CSV</strong> — Save current list for backup.</li>
+            <li><strong>Clear</strong> — Remove all imported calls (in-memory only).</li>
+          </ul>
+          <p style="margin-top:8px;">To get call data from iPhone: use a call history backup app, or export from Settings → Phone, then import the file here.</p>
+        </div>
         <div class="call-history-controls">
           <input type="file" id="call-import-input" accept=".csv,.json,text/csv,application/json" class="input-file-hidden">
           <button id="btn-import-calls" class="btn btn-primary">Import</button>
@@ -341,7 +414,15 @@
     <section id="advanced" class="tab-content" role="tabpanel" aria-labelledby="tab-advanced">
       <div class="card">
         <h2>Agentic Auto-Discovery</h2>
-        <p class="hint">Automated BLE pipeline: scan, connect, enumerate, read, capture, and analyze &mdash; all in one tap. Real-time status feed.</p>
+        <p class="hint">Automated pipeline: scan → connect → enumerate → read → capture → analyze. One tap, real-time status.</p>
+        <div class="section-desc">
+          <strong>Options:</strong>
+          <ul>
+            <li><strong>Run Full Discovery Agent</strong> — Full pipeline on one device. Scans, connects, reads all characteristics, captures profile, runs vulnerability assessment.</li>
+            <li><strong>Quick Scan Only</strong> — Scan only; no connect or read. Fast device discovery.</li>
+            <li><strong>Stop Agent</strong> — Cancel the current run.</li>
+          </ul>
+        </div>
         <div class="agent-controls">
           <button id="btn-agent-full" class="btn btn-primary btn-large">
             Run Full Discovery Agent
@@ -357,7 +438,10 @@
 
       <div class="card">
         <h2>Parallel Multi-Device Discovery</h2>
-        <p class="hint">Analyze all discovered devices simultaneously. Scan for devices first, then launch parallel agents that connect, enumerate, and assess each device concurrently with batched characteristic reads.</p>
+        <p class="hint">Run discovery on multiple devices at once. Scan first to populate the list, then launch parallel agents.</p>
+        <div class="section-desc">
+          <strong>How it works:</strong> Each device gets its own agent. Agents connect, enumerate GATT, read characteristics in batches, and assess security in parallel. Progress shows running/done/total. Use “Stop All Agents” to cancel.
+        </div>
         <div id="parallel-device-count" class="parallel-device-count">0 devices available</div>
         <div class="agent-controls">
           <button id="btn-agent-parallel" class="btn btn-primary btn-large">
@@ -411,8 +495,16 @@
     <section id="settings" class="tab-content" role="tabpanel" aria-labelledby="tab-settings">
       <div class="card">
         <h2>Settings &amp; Options</h2>
-        <p class="hint">Preferences are saved automatically. Changes apply immediately.</p>
-
+        <p class="hint">Stored in localStorage. Changes apply immediately. Expand each section to edit.</p>
+        <div class="section-desc">
+          <strong>Sections:</strong>
+          <ul>
+            <li><strong>Appearance</strong> — Dark or light theme.</li>
+            <li><strong>Audio</strong> — Persist volume across sessions.</li>
+            <li><strong>Scan</strong> — Default scan timeout hint (5–30 sec or default).</li>
+            <li><strong>Device List Defaults</strong> — Default sort (newest/oldest/name) and filter (all/connected/available).</li>
+          </ul>
+        </div>
         <div class="settings-section">
           <button class="settings-toggle" data-toggle="appearance" aria-expanded="false">
             <span>Appearance</span>
@@ -497,7 +589,10 @@
     <section id="log" class="tab-content" role="tabpanel" aria-labelledby="tab-log">
       <div class="card">
         <div class="log-header">
-          <h2>Activity Log</h2>
+          <div>
+            <h2>Activity Log</h2>
+            <p class="hint hint-tight">Timestamped record of scans, connections, reads, writes, and errors. Use Copy to share or save.</p>
+          </div>
           <div>
             <button id="btn-copy-log" class="btn btn-secondary btn-small">Copy</button>
             <button id="btn-clear-log" class="btn btn-danger btn-small">Clear</button>
