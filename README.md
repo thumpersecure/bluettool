@@ -48,6 +48,7 @@
 - [⚠️ Disclaimer](#️-disclaimer)
 - [🛠 Tech Stack](#-tech-stack)
 - [📁 Project Structure](#-project-structure)
+- [📶 Bluetooth Compatibility](#-bluetooth-compatibility)
 - [🔒 Limitations](#-limitations)
 - [🐛 Known Issues & Fixes](#-known-issues--fixes)
 - [🚢 Deployment](#-deployment)
@@ -301,6 +302,7 @@ bluettool/
 │   └── style.css           # Dark theme, mobile-first styles
 ├── js/
 │   ├── logger.js           # Centralized activity logger
+│   ├── browser-compat.js   # Browser/feature detection (Bluefy vs Chrome)
 │   ├── call-history.js     # Call history import/export
 │   ├── bluetooth-scanner.js # Web Bluetooth (BLE) engine
 │   ├── serial-bluetooth.js # Classic Bluetooth (Web Serial)
@@ -348,11 +350,27 @@ flowchart LR
 
 ---
 
+## 📶 Bluetooth Compatibility
+
+| Feature | Bluefy (iOS) | Chrome 117+ | Safari |
+|---------|--------------|-------------|--------|
+| **BLE (Web Bluetooth)** | ✅ Works | ✅ Works | ❌ No |
+| **Classic BT (Web Serial)** | ❌ No | ✅ Works | ❌ No |
+
+- **iPhone/Bluefy:** BLE only. Classic BT is not supported (Web Serial is not in Bluefy/Safari).
+- **Chrome 117+:** Full support — BLE and Classic BT (RFCOMM/SPP).
+- **Safari:** No Web Bluetooth. Use Bluefy on iOS or Chrome on desktop.
+
+The app applies **graceful degradation**: the Classic BT button is disabled in Bluefy with the message *"Classic BT requires Chrome 117+"*. See [RECOMMENDATIONS.md](RECOMMENDATIONS.md) for detailed guidance and workarounds.
+
+---
+
 ## 🔒 Limitations
 
 | Limitation | Notes |
 |------------|-------|
 | **Bluefy required on iOS** | Safari does not support Web Bluetooth |
+| **Classic BT requires Chrome 117+** | Not available in Bluefy or Safari |
 | **No passive scanning** | Each scan requires user interaction with the browser's device chooser |
 | **Device IDs** | Browser-generated; real MAC addresses hidden for privacy |
 | **BLE vs Classic** | BLE uses GATT; Classic uses Web Serial (Chrome 117+) |
