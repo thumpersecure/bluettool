@@ -15,6 +15,19 @@ const BluetoothScanner = (() => {
     '00001300-0000-1000-8000-00805f9b34fb'  // Bluetooth Mesh Lighting service
   ];
 
+  const IDENTITY_CHAR_UUIDS = new Set([
+    '00002a00-0000-1000-8000-00805f9b34fb', // Device Name
+    '00002a29-0000-1000-8000-00805f9b34fb', // Manufacturer Name
+    '00002a24-0000-1000-8000-00805f9b34fb', // Model Number
+  ]);
+
+  const COMMON_SERVICE_UUIDS = [
+    'generic_access', 'generic_attribute', 'device_information', 'battery_service',
+    'heart_rate', 'health_thermometer', 'tx_power', 'immediate_alert', 'link_loss',
+    'current_time', 'human_interface_device',
+    ...SMART_LIGHT_SERVICE_UUIDS,
+  ];
+
   /** Check Web Bluetooth support */
   function checkSupport() {
     const results = [];
@@ -86,6 +99,7 @@ const BluetoothScanner = (() => {
     }
 
     renderCompatibility(results);
+    renderCompatMatrix();
     return results;
   }
 
@@ -100,6 +114,29 @@ const BluetoothScanner = (() => {
         <span class="${cls}">${icon} ${r.detail}</span>
       </div>`;
     }).join('');
+  }
+
+  function renderCompatMatrix() {
+    const container = document.getElementById('compat-matrix');
+    if (!container || typeof BrowserCompat === 'undefined') return;
+
+    const matrix = BrowserCompat.getFeatureMatrix();
+    const browserName = BrowserCompat.getBrowserName();
+
+    container.innerHTML = `
+      <div class="compat-matrix-header">What works in ${browserName}</div>
+      <div class="compat-matrix-grid">
+        <div class="compat-matrix-item ${matrix.ble.supported ? 'compat-ok' : 'compat-fail'}">
+          <span class="compat-matrix-label">BLE (Web Bluetooth)</span>
+          <span class="compat-matrix-detail">${matrix.ble.supported ? '\u2713 Works' : '\u2717 Not available'}</span>
+        </div>
+        <div class="compat-matrix-item ${matrix.classicBt.supported ? 'compat-ok' : 'compat-fail'}">
+          <span class="compat-matrix-label">Classic BT (Web Serial)</span>
+          <span class="compat-matrix-detail">${matrix.classicBt.supported ? '\u2713 Works' : '\u2717 Chrome 117+ only'}</span>
+        </div>
+      </div>
+      <p class="compat-matrix-hint">Bluefy: BLE only. Chrome 117+: BLE + Classic BT.</p>
+    `;
   }
 
   /**
@@ -125,6 +162,7 @@ const BluetoothScanner = (() => {
         id: device.id,
         name: (device.name || '').trim() || 'Unknown Device',
         device: device,
+        server: null,
         discovered: new Date().toISOString(),
         connected: false,
         services: [],
@@ -143,10 +181,11 @@ const BluetoothScanner = (() => {
       device.addEventListener('gattserverdisconnected', () => {
         Logger.warn(`Device disconnected: ${info.name}`);
         info.connected = false;
-        connectedDevice = null;
-        connectedServer = null;
+        info.server = null;
+        if (connectedDevice && connectedDevice.id === info.id) connectedDevice = null;
+        if (connectedServer && connectedServer.device && connectedServer.device.id === info.id) connectedServer = null;
         updateStatus('offline', 'Disconnected');
-        if (onConnectionChange) onConnectionChange(info, false);
+        if (onConnectionChange) onConnectionChange(info, false, { source: 'device' });
       });
 
       if (onDeviceFound) onDeviceFound(info);
@@ -165,17 +204,26 @@ const BluetoothScanner = (() => {
 
   /**
    * Scan accepting all devices (no filter)
+   * @param {Object} options - Optional scan options (e.g. scanDuration)
    */
-  async function scanAll() {
-    return scan({ acceptAll: true });
+  async function scanAll(options = {}) {
+    return scan({ acceptAll: true, ...options });
   }
 
   function buildScanFilters(options) {
+    const base = (params) => {
+      const result = { ...params };
+      if (options.scanDuration && options.scanDuration > 0) {
+        result.scanDuration = options.scanDuration;
+      }
+      return result;
+    };
+
     if (options.acceptAll) {
-      return {
+      return base({
         acceptAllDevices: true,
         optionalServices: getCommonServiceUUIDs()
-      };
+      });
     }
 
     const filters = [];
@@ -189,39 +237,26 @@ const BluetoothScanner = (() => {
     }
 
     if (filters.length === 0) {
-      return {
+      return base({
         acceptAllDevices: true,
         optionalServices: getCommonServiceUUIDs()
-      };
+      });
     }
 
-    return {
+    return base({
       filters,
       optionalServices: getCommonServiceUUIDs()
-    };
+    });
   }
 
   function getCommonServiceUUIDs() {
-    return [
-      'generic_access',
-      'generic_attribute',
-      'device_information',
-      'battery_service',
-      'heart_rate',
-      'health_thermometer',
-      'tx_power',
-      'immediate_alert',
-      'link_loss',
-      'current_time',
-      'human_interface_device',
-      ...SMART_LIGHT_SERVICE_UUIDS,
-    ];
+    return COMMON_SERVICE_UUIDS;
   }
 
   /**
    * Connect to a discovered device and enumerate its GATT services
    */
-  async function connect(deviceId) {
+  async function connect(deviceId, options = {}) {
     const info = devices.get(deviceId);
     if (!info) {
       Logger.error(`Unknown device ID: ${deviceId}`);
@@ -229,24 +264,28 @@ const BluetoothScanner = (() => {
     }
 
     Logger.info(`Connecting to ${info.name}...`);
-    updateStatus('scanning', 'Connecting...');
+    updateStatus('connecting', 'Connecting...');
 
     try {
       if (!info.device.gatt) {
         throw new Error('Device GATT server unavailable — try scanning again');
       }
+      const deepReadOnEnumerate = options.deepReadOnEnumerate !== false;
+      const ctx = { ...options, source: options.source || 'user' };
+
       const server = await info.device.gatt.connect();
-      connectedDevice = info;
+      info.server = server;
+      connectedDevice = info; // "active" device for UI features like Replay
       connectedServer = server;
       info.connected = true;
 
       Logger.success(`Connected to ${info.name}`);
       updateStatus('connected', `Connected: ${info.name}`);
 
-      if (onConnectionChange) onConnectionChange(info, true);
+      if (onConnectionChange) onConnectionChange(info, true, ctx);
 
       // Enumerate services
-      await enumerateServices(info, server);
+      await enumerateServices(info, server, { readValues: deepReadOnEnumerate });
 
       return info;
 
@@ -273,23 +312,25 @@ const BluetoothScanner = (() => {
       // GATT may already be disconnected
     }
     info.connected = false;
+    info.server = null;
     if (connectedDevice && connectedDevice.id === deviceId) {
       connectedDevice = null;
       connectedServer = null;
     }
     updateStatus('offline', 'Disconnected');
-    if (onConnectionChange) onConnectionChange(info, false);
+    if (onConnectionChange) onConnectionChange(info, false, { source: 'user' });
   }
 
   /**
    * Enumerate all GATT services and their characteristics
    */
-  async function enumerateServices(info, server) {
+  async function enumerateServices(info, server, options = {}) {
     Logger.info('Enumerating GATT services...');
     info.services = [];
     info.characteristics = [];
     info.lightTestPlan = null;
     info.deviceType = 'unknown';
+    const readValues = options.readValues !== false;
 
     try {
       const services = await server.getPrimaryServices();
@@ -322,7 +363,9 @@ const BluetoothScanner = (() => {
             };
 
             // Try to read the value
-            if (char.properties.read) {
+            const normalizedUuid = normalizeUuid(char.uuid);
+            const shouldReadValue = !!(char.properties.read && (readValues || IDENTITY_CHAR_UUIDS.has(normalizedUuid)));
+            if (shouldReadValue) {
               try {
                 const value = await char.readValue();
                 charInfo.value = dataViewToHex(value);
@@ -381,11 +424,11 @@ const BluetoothScanner = (() => {
    */
   async function writeCharacteristic(charInfo, hexString) {
     try {
-      if (!charInfo?.characteristic) {
+      if (!charInfo || !charInfo.characteristic) {
         throw new Error('Invalid characteristic');
       }
 
-      const gatt = charInfo?.characteristic?.service?.device?.gatt;
+      const gatt = charInfo.characteristic.service?.device?.gatt;
       if (!gatt || !gatt.connected) {
         throw new Error('Device disconnected');
       }
@@ -464,14 +507,25 @@ const BluetoothScanner = (() => {
   }
 
   function normalizeUuid(uuid) {
-    return String(uuid || '').toLowerCase();
+    const raw = String(uuid || '').toLowerCase().trim();
+    if (!raw) return '';
+    if (typeof BluetoothUUID !== 'undefined' && typeof BluetoothUUID.canonicalUUID === 'function') {
+      try {
+        return BluetoothUUID.canonicalUUID(raw);
+      } catch (_) { /* fall through */ }
+    }
+    if (/^[0-9a-f]{4}$/.test(raw)) {
+      return `0000${raw}-0000-1000-8000-00805f9b34fb`;
+    }
+    return raw;
   }
 
   function getTextCharacteristicValue(info, targetUuid) {
-    if (!info?.services?.length) return '';
+    if (!info || !info.services || info.services.length === 0) return '';
     const normalizedTarget = normalizeUuid(targetUuid);
     for (const svc of info.services) {
-      for (const ch of svc.characteristics || []) {
+      const chars = svc.characteristics || [];
+      for (const ch of chars) {
         if (normalizeUuid(ch.uuid) === normalizedTarget && typeof ch.textValue === 'string') {
           return ch.textValue.replace(/\0/g, '').trim();
         }
@@ -508,8 +562,8 @@ const BluetoothScanner = (() => {
   }
 
   function isWritableCharacteristic(charInfo) {
-    if (!charInfo?.properties) return false;
-    return charInfo.properties.includes('write') || charInfo.properties.includes('writeNoResp');
+    const props = charInfo?.properties;
+    return Array.isArray(props) && (props.includes('write') || props.includes('writeNoResp'));
   }
 
   function detectDeviceType(info) {
@@ -711,26 +765,29 @@ const BluetoothScanner = (() => {
     return names[normalized] || names[uuid] || uuid;
   }
 
+  let _statusIndicator = null;
+  let _statusText = null;
+  let _deviceCountEl = null;
   function updateStatus(state, text) {
-    const indicator = document.getElementById('bt-status-indicator');
-    const statusText = document.getElementById('bt-status-text');
-    if (indicator) {
-      indicator.className = `indicator ${state}`;
-    }
-    if (statusText) {
-      statusText.textContent = text;
-    }
+    if (!_statusIndicator) _statusIndicator = document.getElementById('bt-status-indicator');
+    if (!_statusText) _statusText = document.getElementById('bt-status-text');
+    if (_statusIndicator) _statusIndicator.className = `indicator ${state}`;
+    if (_statusText) _statusText.textContent = text;
   }
 
   function updateDeviceCount() {
-    const el = document.getElementById('device-count');
-    if (el) {
-      el.textContent = `${devices.size} device${devices.size !== 1 ? 's' : ''}`;
+    if (!_deviceCountEl) _deviceCountEl = document.getElementById('device-count');
+    if (_deviceCountEl) {
+      _deviceCountEl.textContent = `${devices.size} device${devices.size !== 1 ? 's' : ''}`;
     }
   }
 
   function getDevices() {
     return Array.from(devices.values());
+  }
+
+  function getDevice(deviceId) {
+    return devices.get(deviceId) || null;
   }
 
   function getConnectedDevice() {
@@ -741,12 +798,18 @@ const BluetoothScanner = (() => {
     return connectedServer;
   }
 
+  function getServer(deviceId) {
+    const info = devices.get(deviceId);
+    return info?.server || null;
+  }
+
   function clearDevices() {
     // Disconnect any connected device first
     for (const [id, info] of devices) {
       if (info.connected && info.device.gatt?.connected) {
         info.device.gatt.disconnect();
       }
+      info.server = null;
     }
     devices.clear();
     connectedDevice = null;
@@ -764,8 +827,8 @@ const BluetoothScanner = (() => {
         info.id,
         info.connected ? 'Yes' : 'No',
         info.discovered,
-        info.services.map(s => s.name).join('; '),
-        info.characteristics.map(c => `${c.name}=${c.value || 'N/A'}`).join('; ')
+        (info.services || []).map(s => s.name).join('; '),
+        (info.characteristics || []).map(c => `${c.name}=${c.value || 'N/A'}`).join('; ')
       ]);
     }
 
@@ -793,13 +856,16 @@ const BluetoothScanner = (() => {
     writeCharacteristic,
     subscribeNotifications,
     getDevices,
+    getDevice,
     getConnectedDevice,
     getConnectedServer,
+    getServer,
     clearDevices,
     exportCSV,
     setOnDeviceFound,
     setOnConnectionChange,
     dataViewToHex,
-    hexToBytes
+    hexToBytes,
+    normalizeUuid
   };
 })();

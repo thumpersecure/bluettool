@@ -4,19 +4,13 @@
   "description": "BLE device scanner, GATT enumerator, and vulnerability testing tool",
   "start_url": "./",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "background_color": "#0a0e27",
   "theme_color": "#0a0e27",
+  "scope": "./",
   "icons": [
-    {
-      "src": "icons/icon-192.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml"
-    },
-    {
-      "src": "icons/icon-512.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml"
-    }
+    {"src": "icons/icon-180.svg", "sizes": "180x180", "type": "image/svg+xml", "purpose": "any"},
+    {"src": "icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any"},
+    {"src": "icons/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any"}
   ]
 }

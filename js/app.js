@@ -4,6 +4,13 @@
  * Optimized for Bluefy browser on iOS.
  */
 document.addEventListener('DOMContentLoaded', () => {
+  // --- DOM Cache (avoids repeated getElementById in hot paths) ---
+  const $cache = {};
+  const $ = (id) => {
+    if (!$cache[id]) $cache[id] = document.getElementById(id);
+    return $cache[id];
+  };
+
   // --- Shared Utilities ---
   function escapeHtml(str) {
     if (!str) return '';
@@ -47,6 +54,22 @@ document.addEventListener('DOMContentLoaded', () => {
     return '';
   }
 
+  function getWritableCount(dev) {
+    return (dev?.characteristics || []).filter(ch =>
+      ch.properties?.includes('write') || ch.properties?.includes('writeNoResp')
+    ).length;
+  }
+
+  function findDeviceAndChar(deviceId, charUuid) {
+    const freshDevices = BluetoothScanner.getDevices();
+    const d = freshDevices.find(x => x.id === deviceId);
+    if (!d) return null;
+    const charInfo = (d.characteristics || []).find(c =>
+      normalizeUuid(c.uuid) === normalizeUuid(charUuid)
+    );
+    return charInfo ? { device: d, charInfo } : null;
+  }
+
   function isValidServiceFilter(value) {
     return /^[a-z_]+$/i.test(value) ||
       /^[0-9a-fA-F]{4}$/.test(value) ||
@@ -72,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const targetChar = dev.characteristics.find(ch =>
+    const targetChar = (dev.characteristics || []).find(ch =>
       normalizeUuid(ch.uuid) === normalizeUuid(plan.targetCharUuid)
     );
     if (!targetChar) {
@@ -136,9 +159,11 @@ document.addEventListener('DOMContentLoaded', () => {
       titleEl.textContent = title;
       messageEl.textContent = message;
       dialog.classList.remove('hidden');
+      dialog.setAttribute('aria-hidden', 'false');
 
       function cleanup(result) {
         dialog.classList.add('hidden');
+        dialog.setAttribute('aria-hidden', 'true');
         okBtn.removeEventListener('click', onOk);
         cancelBtn.removeEventListener('click', onCancel);
         dialog.removeEventListener('click', onOverlayClick);
@@ -156,11 +181,176 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // --- Device Notes (localStorage) ---
+  const DEVICE_NOTES_KEY = 'bluettool_device_notes';
+
+  function getDeviceNotes(deviceId) {
+    try {
+      const raw = localStorage.getItem(DEVICE_NOTES_KEY);
+      if (!raw) return '';
+      const map = JSON.parse(raw);
+      return String(map[deviceId] || '').trim();
+    } catch {
+      return '';
+    }
+  }
+
+  function setDeviceNotes(deviceId, notes) {
+    try {
+      const raw = localStorage.getItem(DEVICE_NOTES_KEY);
+      const map = raw ? JSON.parse(raw) : {};
+      const trimmed = String(notes || '').trim();
+      if (trimmed) {
+        map[deviceId] = trimmed;
+      } else {
+        delete map[deviceId];
+      }
+      localStorage.setItem(DEVICE_NOTES_KEY, JSON.stringify(map));
+    } catch (_) { /* ignore */ }
+  }
+
+  // --- Settings (localStorage) ---
+  // Use bluettool_* prefix for any new localStorage keys (e.g. bluettool_call_history, bluettool_captures)
+  const SETTINGS_KEY = 'bluettool_settings';
+  const FAVORITES_KEY = 'bluettool_favorites';
+  const LAST_CONNECTED_KEY = 'bluettool_last_connected';
+  const DEFAULT_SETTINGS = {
+    themeDark: true,
+    persistVolume: true,
+    volume: 50,
+    scanTimeout: 0,
+    defaultSort: 'date-desc',
+    defaultFilter: 'all'
+  };
+
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return { ...DEFAULT_SETTINGS };
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_SETTINGS, ...parsed };
+    } catch {
+      return { ...DEFAULT_SETTINGS };
+    }
+  }
+
+  function saveSettings(settings) {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch (_) { /* ignore */ }
+  }
+
+  function loadFavorites() {
+    try {
+      const raw = localStorage.getItem(FAVORITES_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveFavorites(ids) {
+    try {
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids));
+    } catch (_) { /* ignore */ }
+  }
+
+  function toggleFavorite(deviceId) {
+    const favs = loadFavorites();
+    const idx = favs.indexOf(deviceId);
+    if (idx >= 0) {
+      favs.splice(idx, 1);
+    } else {
+      favs.push(deviceId);
+    }
+    saveFavorites(favs);
+    renderDeviceList();
+  }
+
+  function isFavorite(deviceId) {
+    return loadFavorites().includes(deviceId);
+  }
+
+  function saveLastConnected(deviceId) {
+    try {
+      localStorage.setItem(LAST_CONNECTED_KEY, deviceId);
+    } catch (_) { /* ignore */ }
+  }
+
+  function loadLastConnected() {
+    try {
+      return localStorage.getItem(LAST_CONNECTED_KEY) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  function clearLastConnected() {
+    try {
+      localStorage.removeItem(LAST_CONNECTED_KEY);
+    } catch (_) { /* ignore */ }
+  }
+
+  function applySettings(settings) {
+    document.documentElement.setAttribute('data-theme', settings.themeDark ? 'dark' : 'light');
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = settings.themeDark ? '#0a0e27' : '#f5f6fa';
+    const themeCheck = document.getElementById('setting-theme-dark');
+    if (themeCheck) themeCheck.checked = settings.themeDark;
+    const persistVol = document.getElementById('setting-persist-volume');
+    if (persistVol) persistVol.checked = settings.persistVolume;
+    if (settings.persistVolume && typeof settings.volume === 'number') {
+      const volSlider = document.getElementById('volume-slider');
+      const volVal = document.getElementById('volume-value');
+      if (volSlider && volVal) {
+        volSlider.value = Math.min(100, Math.max(0, settings.volume));
+        volVal.textContent = volSlider.value + '%';
+        if (typeof AudioPlayer !== 'undefined') AudioPlayer.setVolume(volSlider.value / 100);
+      }
+    }
+    const scanTimeout = document.getElementById('setting-scan-timeout');
+    if (scanTimeout) scanTimeout.value = String(settings.scanTimeout || 0);
+    const defaultSort = document.getElementById('setting-default-sort');
+    if (defaultSort) defaultSort.value = settings.defaultSort || 'date-desc';
+    const defaultFilter = document.getElementById('setting-default-filter');
+    if (defaultFilter) defaultFilter.value = settings.defaultFilter || 'all';
+    const deviceSort = document.getElementById('device-sort');
+    if (deviceSort) deviceSort.value = settings.defaultSort || 'date-desc';
+    const deviceFilter = document.getElementById('device-filter');
+    if (deviceFilter) deviceFilter.value = settings.defaultFilter || 'all';
+    const scanDurationHint = document.getElementById('scan-duration-hint');
+    if (scanDurationHint) scanDurationHint.value = String(settings.scanTimeout || 0);
+  }
+
+  function getCurrentSettings() {
+    const s = loadSettings();
+    const themeCheck = document.getElementById('setting-theme-dark');
+    const persistVol = document.getElementById('setting-persist-volume');
+    const volSlider = document.getElementById('volume-slider');
+    const scanTimeout = document.getElementById('setting-scan-timeout');
+    const defaultSort = document.getElementById('setting-default-sort');
+    const defaultFilter = document.getElementById('setting-default-filter');
+    return {
+      ...s,
+      themeDark: themeCheck ? themeCheck.checked : s.themeDark,
+      persistVolume: persistVol ? persistVol.checked : s.persistVolume,
+      volume: volSlider ? parseInt(volSlider.value, 10) : s.volume,
+      scanTimeout: scanTimeout ? parseInt(scanTimeout.value, 10) : s.scanTimeout,
+      defaultSort: defaultSort ? defaultSort.value : s.defaultSort,
+      defaultFilter: defaultFilter ? defaultFilter.value : s.defaultFilter
+    };
+  }
+
   // --- Initialize ---
   Logger.init();
   Logger.info('BlueTTool initialized — Bluefy mobile app');
   Logger.info('Checking browser compatibility...');
   BluetoothScanner.checkSupport();
+
+  const initialSettings = loadSettings();
+  applySettings(initialSettings);
 
   // --- Tab Navigation ---
   const tabs = document.querySelectorAll('.tab');
@@ -169,21 +359,77 @@ document.addEventListener('DOMContentLoaded', () => {
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.tab;
-      tabs.forEach(t => t.classList.remove('active'));
+      tabs.forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
       tabContents.forEach(tc => tc.classList.remove('active'));
       tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
       const targetEl = document.getElementById(target);
       if (targetEl) targetEl.classList.add('active');
     });
+  });
+
+  // Empty state CTA: Go to Scan, Go to Devices
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#empty-cta-scan')) {
+      const scanTab = document.querySelector('.tab[data-tab="scanner"]');
+      if (scanTab) scanTab.click();
+    }
+    if (e.target.closest('#empty-cta-import-calls')) {
+      $('call-import-input')?.click();
+    }
+    if (e.target.closest('#empty-cta-devices')) {
+      const devicesTab = document.querySelector('.tab[data-tab="devices"]');
+      if (devicesTab) devicesTab.click();
+    }
+  });
+
+  // Device list: event delegation (single listener, no re-binding on re-render)
+  $('device-list')?.addEventListener('click', (e) => {
+    const reconnectBtn = e.target.closest('.btn-reconnect');
+    if (reconnectBtn) {
+      e.stopPropagation();
+      reconnectBtn.disabled = true;
+      reconnectBtn.textContent = 'Connecting...';
+      BluetoothScanner.connect(reconnectBtn.dataset.deviceId)
+        .then(() => renderDeviceList())
+        .catch(() => {
+          reconnectBtn.disabled = false;
+          reconnectBtn.textContent = 'Reconnect';
+          showToast('Connection failed', 'error');
+        });
+      return;
+    }
+    const lightTestBtn = e.target.closest('.btn-light-test');
+    if (lightTestBtn) {
+      e.stopPropagation();
+      runLightTestAction(lightTestBtn.dataset.deviceId, lightTestBtn.dataset.action, lightTestBtn);
+      return;
+    }
+    const deviceItem = e.target.closest('.device-item');
+    if (deviceItem && !e.target.closest('.device-quick-actions .btn')) {
+      showDeviceDetail(deviceItem.dataset.deviceId);
+    }
   });
 
   // --- Scanner Tab ---
   const btnScan = document.getElementById('btn-scan');
   const btnScanAll = document.getElementById('btn-scan-all');
 
-  // Classic Bluetooth (Web Serial)
+  // Classic Bluetooth (Web Serial) — graceful degradation: disable in Bluefy
   const btnSerialConnect = document.getElementById('btn-serial-connect');
   const serialStatusEl = document.getElementById('serial-status');
+  const classicBtUnavailableEl = document.getElementById('classic-bt-unavailable');
+
+  function applyClassicBtUiState() {
+    const supported = typeof SerialBluetooth !== 'undefined' && SerialBluetooth.isSupported();
+    if (btnSerialConnect) btnSerialConnect.disabled = !supported;
+    if (classicBtUnavailableEl) classicBtUnavailableEl.classList.toggle('hidden', supported);
+  }
+  applyClassicBtUiState();
+
   if (btnSerialConnect && typeof SerialBluetooth !== 'undefined') {
     function updateSerialButton() {
       btnSerialConnect.textContent = SerialBluetooth.isConnected() ? 'Disconnect Classic BT' : 'Connect Classic BT Device';
@@ -222,6 +468,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const nameValue = document.getElementById('filter-name-value').value.trim();
     const svcFilterEnabled = document.getElementById('filter-services').checked;
     const svcValue = document.getElementById('filter-service-value').value.trim();
+    const scanDurationHint = document.getElementById('scan-duration-hint');
+    const scanDuration = scanDurationHint ? parseInt(scanDurationHint.value, 10) : 0;
 
     if (nameFilterEnabled && nameValue) {
       options.namePrefix = nameValue;
@@ -233,8 +481,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       options.services = [svcValue];
     }
+    if (scanDuration > 0) {
+      options.scanDuration = scanDuration;
+    }
 
     btnScan.disabled = true;
+    btnScan.classList.add('loading');
+    const scanLabel = btnScan.textContent;
+    btnScan.dataset.originalText = scanLabel;
     btnScan.textContent = 'Scanning...';
     try {
       await BluetoothScanner.scan(options);
@@ -244,73 +498,143 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(err?.message || 'Scan cancelled or failed', 'error');
     } finally {
       btnScan.disabled = false;
-      btnScan.textContent = 'Scan for Devices';
+      btnScan.classList.remove('loading');
+      btnScan.textContent = btnScan.dataset.originalText || 'Scan for Devices';
     }
   });
 
   btnScanAll?.addEventListener('click', async () => {
+    const scanDurationHint = document.getElementById('scan-duration-hint');
+    const scanDuration = scanDurationHint ? parseInt(scanDurationHint.value, 10) : 0;
+    const options = scanDuration > 0 ? { scanDuration } : {};
     btnScanAll.disabled = true;
+    btnScanAll.classList.add('loading');
+    const scanAllLabel = btnScanAll.textContent;
+    btnScanAll.dataset.originalText = scanAllLabel;
     btnScanAll.textContent = 'Scanning...';
     try {
-      await BluetoothScanner.scanAll();
+      await BluetoothScanner.scanAll(options);
       renderDeviceList();
       showToast('Device found', 'success');
     } catch (err) {
       showToast(err?.message || 'Scan cancelled or failed', 'error');
     } finally {
       btnScanAll.disabled = false;
-      btnScanAll.textContent = 'Scan All (No Filter)';
+      btnScanAll.classList.remove('loading');
+      btnScanAll.textContent = btnScanAll.dataset.originalText || 'Scan All (No Filter)';
     }
   });
 
   // --- Device List ---
-  BluetoothScanner.setOnDeviceFound(() => {
+  // Device found and connection change callbacks are set in the Agent section
+  // to also update parallel device counts alongside device list rendering.
+
+  document.getElementById('btn-refresh-devices')?.addEventListener('click', () => {
     renderDeviceList();
+    showToast('Device list refreshed', 'info');
   });
 
-  BluetoothScanner.setOnConnectionChange((info, connected) => {
+  function onDeviceListPrefChange(sortOrFilter, key) {
     renderDeviceList();
-    const displayName = getDisplayName(info);
-    if (connected) {
-      showAudioOverlay();
-      AudioPlayer.triggerOnConnect();
-      showToast(`Connected to ${displayName}`, 'success');
-    } else {
-      showToast(`Disconnected from ${displayName}`, 'info');
-    }
-  });
+    const s = getCurrentSettings();
+    s[key] = $('device-' + sortOrFilter)?.value || s[key];
+    saveSettings(s);
+  }
+  $('device-sort')?.addEventListener('change', () => onDeviceListPrefChange('sort', 'defaultSort'));
+  $('device-filter')?.addEventListener('change', () => onDeviceListPrefChange('filter', 'defaultFilter'));
 
-  document.getElementById('btn-clear-devices').addEventListener('click', async () => {
+  document.getElementById('btn-clear-devices')?.addEventListener('click', async () => {
     const devices = BluetoothScanner.getDevices();
     if (devices.length === 0) return;
     const confirmed = await showConfirm('Clear All Devices',
       `Remove ${devices.length} device(s) from the list? Connected devices will be disconnected.`);
     if (!confirmed) return;
     BluetoothScanner.clearDevices();
+    clearLastConnected();
     renderDeviceList();
+    updateQuickReconnectUI();
     showToast('Device list cleared', 'info');
   });
 
-  document.getElementById('btn-export-devices').addEventListener('click', () => {
+  document.getElementById('btn-export-devices')?.addEventListener('click', () => {
     BluetoothScanner.exportCSV();
     showToast('CSV exported', 'success');
   });
 
-  function renderDeviceList() {
-    const list = document.getElementById('device-list');
+  function getFilteredAndSortedDevices() {
     const devices = BluetoothScanner.getDevices();
+    const filterVal = $('device-filter')?.value || 'all';
+    const sortVal = $('device-sort')?.value || 'date-desc';
+    const favs = loadFavorites();
 
-    const countEl = document.getElementById('device-count');
+    let filtered = devices;
+    if (filterVal === 'connected') {
+      filtered = devices.filter(d => d.connected);
+    } else if (filterVal === 'available') {
+      filtered = devices.filter(d => !d.connected);
+    }
+
+    const sorted = [...filtered].sort((a, b) => {
+      const aPinned = favs.includes(a.id);
+      const bPinned = favs.includes(b.id);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+      const nameA = getDisplayName(a).toLowerCase();
+      const nameB = getDisplayName(b).toLowerCase();
+      const dateA = new Date(a.discovered).getTime();
+      const dateB = new Date(b.discovered).getTime();
+      if (sortVal === 'name-asc') return nameA.localeCompare(nameB);
+      if (sortVal === 'name-desc') return nameB.localeCompare(nameA);
+      if (sortVal === 'date-asc') return dateA - dateB;
+      return dateB - dateA; // date-desc
+    });
+    return sorted;
+  }
+
+  let renderDeviceListRaf = null;
+  function renderDeviceList() {
+    if (renderDeviceListRaf) return;
+    renderDeviceListRaf = requestAnimationFrame(() => {
+      renderDeviceListRaf = null;
+      renderDeviceListImmediate();
+    });
+  }
+
+  function renderDeviceListImmediate() {
+    const list = $('device-list');
+    if (!list) return;
+    const allDevices = BluetoothScanner.getDevices();
+    const devices = getFilteredAndSortedDevices();
+
+    const countEl = $('device-count');
     if (countEl) {
-      countEl.textContent = `${devices.length} device${devices.length !== 1 ? 's' : ''}`;
+      countEl.textContent = `${allDevices.length} device${allDevices.length !== 1 ? 's' : ''}`;
+    }
+
+    if (allDevices.length === 0) {
+      list.innerHTML = `<div class="empty-state" id="devices-empty-state">
+        <div class="empty-icon" aria-hidden="true">&#x1F4E1;</div>
+        <p>No devices discovered yet</p>
+        <p class="empty-hint">Tap <strong>Scan</strong> to find nearby BLE devices. Make sure Bluetooth is on.</p>
+        <button type="button" class="empty-cta" id="empty-cta-scan" aria-label="Go to Scan tab">Go to Scan</button>
+      </div>`;
+      return;
     }
 
     if (devices.length === 0) {
-      list.innerHTML = `<div class="empty-state">
-        <div class="empty-icon">&#x1F4E1;</div>
-        <p>No devices discovered yet</p>
-        <p class="empty-hint">Go to Scan tab to find nearby BLE devices</p>
+      list.innerHTML = `<div class="empty-state" id="devices-filter-empty-state">
+        <div class="empty-icon" aria-hidden="true">&#x1F50C;</div>
+        <p>No devices match the current filter</p>
+        <p class="empty-hint">Try "All devices" in the filter dropdown, or scan for more devices.</p>
+        <button type="button" class="empty-cta" id="empty-cta-reset-filter" aria-label="Show all devices">Show All Devices</button>
       </div>`;
+      const resetBtn = list.querySelector('#empty-cta-reset-filter');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          const filterEl = $('device-filter');
+          if (filterEl) { filterEl.value = 'all'; renderDeviceList(); }
+        });
+      }
       return;
     }
 
@@ -319,13 +643,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const deviceTypeLabel = getDeviceTypeLabel(dev);
       const plan = dev.lightTestPlan;
       const hasLightPlan = !!(plan?.available);
-      const writableCount = (dev.characteristics || []).filter(ch =>
-        ch.properties?.includes('write') || ch.properties?.includes('writeNoResp')
-      ).length;
+      const writableCount = getWritableCount(dev);
+      const pinned = isFavorite(dev.id);
+      const hasNotes = !!getDeviceNotes(dev.id);
       return `
       <div class="device-item" data-device-id="${escapeHtml(dev.id)}">
         <div class="device-item-header">
+          <button class="btn btn-ghost btn-pin" data-device-id="${escapeHtml(dev.id)}" title="${pinned ? 'Unpin' : 'Pin to top'}" aria-label="${pinned ? 'Unpin' : 'Pin to top'}">${pinned ? '&#128204;' : '&#128205;'}</button>
           <span class="device-name">${escapeHtml(displayName)}</span>
+          ${hasNotes ? '<span class="device-note-badge" title="Has notes">&#x1F4DD;</span>' : ''}
           ${dev.connected ? '<span class="conn-badge">Connected</span>' : ''}
         </div>
         <div class="device-id-row">
@@ -338,8 +664,8 @@ document.addEventListener('DOMContentLoaded', () => {
           ${hasLightPlan ? `<span class="device-tag tag-best-test">Best: ${escapeHtml(plan.bestActionLabel || plan.bestAction)}</span>` : ''}
           ${dev.connected && !hasLightPlan && writableCount === 0 ? '<span class="device-tag tag-best-test">No writable chars</span>' : ''}
           ${!dev.connected ? '<span class="device-tag tag-best-test">Connect for tests</span>' : ''}
-          ${dev.services.length > 0 ? `<span class="device-tag tag-service">${dev.services.length} svc</span>` : ''}
-          ${dev.characteristics.length > 0 ? `<span class="device-tag tag-char">${dev.characteristics.length} char</span>` : ''}
+          ${(dev.services || []).length > 0 ? `<span class="device-tag tag-service">${(dev.services || []).length} svc</span>` : ''}
+          ${(dev.characteristics || []).length > 0 ? `<span class="device-tag tag-char">${(dev.characteristics || []).length} char</span>` : ''}
           <span class="device-tag tag-time">${new Date(dev.discovered).toLocaleTimeString()}</span>
         </div>
         ${dev.connected && hasLightPlan ? `<div class="device-quick-actions">
@@ -354,42 +680,49 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     }).join('');
 
-    // Click on device item -> detail
-    list.querySelectorAll('.device-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        // Don't open detail if clicking a button
-        if (e.target.closest('.device-quick-actions .btn')) return;
-        showDeviceDetail(item.dataset.deviceId);
-      });
-    });
-
-    // Reconnect buttons
-    list.querySelectorAll('.btn-reconnect').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        btn.disabled = true;
-        btn.textContent = 'Connecting...';
-        try {
-          await BluetoothScanner.connect(btn.dataset.deviceId);
-          renderDeviceList();
-        } catch (_) {
-          btn.disabled = false;
-          btn.textContent = 'Reconnect';
-          showToast('Connection failed', 'error');
-        }
-      });
-    });
-
-    list.querySelectorAll('.btn-light-test').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        await runLightTestAction(btn.dataset.deviceId, btn.dataset.action, btn);
-      });
-    });
-
     // Update captures section
     renderCaptures();
+    updateQuickReconnectUI();
   }
+
+  function updateQuickReconnectUI() {
+    const card = $('quick-reconnect-card');
+    const nameEl = $('quick-reconnect-name');
+    if (!card || !nameEl) return;
+
+    const lastId = loadLastConnected();
+    const devices = BluetoothScanner.getDevices();
+    const dev = devices.find(d => d.id === lastId);
+
+    if (lastId && dev && !dev.connected) {
+      card.classList.remove('hidden');
+      nameEl.textContent = getDisplayName(dev);
+    } else {
+      card.classList.add('hidden');
+    }
+  }
+
+  $('btn-quick-reconnect')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
+    const lastId = loadLastConnected();
+    if (!lastId) return;
+    btn.disabled = true;
+    const nameEl = $('quick-reconnect-name');
+    const origName = nameEl?.textContent || 'Device';
+    if (nameEl) nameEl.textContent = 'Connecting...';
+    try {
+      await BluetoothScanner.connect(lastId);
+      renderDeviceList();
+    } catch (_) {
+      showToast('Connection failed', 'error');
+      if (nameEl) nameEl.textContent = origName;
+    } finally {
+      btn.disabled = false;
+      const dev = BluetoothScanner.getDevice(lastId);
+      if (nameEl) nameEl.textContent = dev ? getDisplayName(dev) : origName;
+    }
+  });
 
   // --- Device Detail Panel ---
   function showDeviceDetail(deviceId) {
@@ -406,7 +739,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const lightPlan = dev.lightTestPlan;
     nameEl.textContent = displayName;
 
+    const currentNotes = getDeviceNotes(deviceId);
     let html = `
+      <div class="detail-section">
+        <h3>Device Notes</h3>
+        <p class="hint" style="margin-bottom:8px;">Add notes for this device (saved locally).</p>
+        <textarea id="device-notes-input" class="input-field device-notes-textarea" placeholder="e.g. Tested on 2024-01-15, firmware v2.1..." rows="3">${escapeHtml(currentNotes)}</textarea>
+        <button class="btn btn-secondary btn-small" id="btn-save-device-notes">Save Notes</button>
+      </div>
       <div class="detail-section">
         <h3>Device Info</h3>
         <div class="detail-row">
@@ -444,11 +784,11 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="detail-row">
           <span class="detail-label">Services</span>
-          <span class="detail-value">${dev.services.length}</span>
+          <span class="detail-value">${(dev.services || []).length}</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">Characteristics</span>
-          <span class="detail-value">${dev.characteristics.length}</span>
+          <span class="detail-value">${(dev.characteristics || []).length}</span>
         </div>
       </div>
     `;
@@ -478,9 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       `;
     } else {
-      const writableCount = (dev.characteristics || []).filter(ch =>
-        ch.properties?.includes('write') || ch.properties?.includes('writeNoResp')
-      ).length;
+      const writableCount = getWritableCount(dev);
       html += `
       <div class="detail-section light-test-section">
         <h3>Smart Light Test Commands</h3>
@@ -504,19 +842,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Services + Characteristics
-    if (dev.services.length > 0) {
-      html += `<div class="detail-section"><h3>GATT Services (${dev.services.length})</h3>`;
-      for (const svc of dev.services) {
+    const devServices = dev.services || [];
+    if (devServices.length > 0) {
+      html += `<div class="detail-section"><h3>GATT Services (${devServices.length})</h3>`;
+      for (const svc of devServices) {
         html += `<div class="service-item">
           <strong>${escapeHtml(svc.name)}</strong>
           <div class="service-uuid">${escapeHtml(svc.uuid)}</div>`;
 
-        for (const char of svc.characteristics) {
+        for (const char of (svc.characteristics || [])) {
+          const props = char.properties || [];
           html += `<div class="char-item">
             <div><strong>${escapeHtml(char.name)}</strong></div>
             <div class="char-uuid">${escapeHtml(char.uuid)}</div>
             <div class="char-props">
-              ${char.properties.map(p => `<span class="char-prop-tag">${p}</span>`).join('')}
+              ${props.map(p => `<span class="char-prop-tag">${escapeHtml(p)}</span>`).join('')}
             </div>`;
 
           if (char.value) {
@@ -527,22 +867,22 @@ document.addEventListener('DOMContentLoaded', () => {
           }
 
           html += `<div class="char-actions">`;
-          if (char.properties.includes('read')) {
+          if (props.includes('read')) {
             html += `<button class="btn btn-secondary btn-small btn-char-read"
               data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">Read</button>`;
           }
-          if (char.properties.includes('notify') || char.properties.includes('indicate')) {
+          if (props.includes('notify') || props.includes('indicate')) {
             html += `<button class="btn btn-secondary btn-small btn-char-notify"
               data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">Subscribe</button>`;
           }
-          if (char.properties.includes('write') || char.properties.includes('writeNoResp')) {
+          if (props.includes('write') || props.includes('writeNoResp')) {
             html += `<button class="btn btn-warning btn-small btn-char-write-toggle"
               data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">Write</button>`;
           }
           html += `</div>`;
 
           // Write input (hidden by default)
-          if (char.properties.includes('write') || char.properties.includes('writeNoResp')) {
+          if (props.includes('write') || props.includes('writeNoResp')) {
             html += `<div class="char-write-form hidden" data-write-for="${escapeHtml(char.uuid)}">
               <input type="text" class="input-field char-write-input" placeholder="Hex value (e.g., 01:ff:ab)" data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">
               <button class="btn btn-warning btn-small btn-char-write-send" data-char-uuid="${escapeHtml(char.uuid)}" data-device-id="${escapeHtml(dev.id)}">Send</button>
@@ -561,6 +901,17 @@ document.addEventListener('DOMContentLoaded', () => {
     panel.classList.remove('hidden');
 
     // --- Bind detail panel buttons ---
+    const saveNotesBtn = document.getElementById('btn-save-device-notes');
+    if (saveNotesBtn) {
+      saveNotesBtn.addEventListener('click', () => {
+        const input = document.getElementById('device-notes-input');
+        const notes = input?.value?.trim() || '';
+        setDeviceNotes(deviceId, notes);
+        showToast(notes ? 'Notes saved' : 'Notes cleared', 'success');
+        renderDeviceList();
+      });
+    }
+
     const connectBtn = document.getElementById('btn-detail-connect');
     if (connectBtn) {
       connectBtn.addEventListener('click', async () => {
@@ -625,16 +976,12 @@ document.addEventListener('DOMContentLoaded', () => {
     content.querySelectorAll('.btn-char-read').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const charUuid = btn.dataset.charUuid;
-        const freshDevices = BluetoothScanner.getDevices();
-        const d = freshDevices.find(x => x.id === btn.dataset.deviceId);
-        if (!d) return;
-        const charInfo = d.characteristics.find(c => normalizeUuid(c.uuid) === normalizeUuid(charUuid));
-        if (!charInfo) return;
+        const found = findDeviceAndChar(btn.dataset.deviceId, btn.dataset.charUuid);
+        if (!found) return;
         btn.disabled = true;
         btn.textContent = 'Reading...';
         try {
-          await BluetoothScanner.readCharacteristic(charInfo);
+          await BluetoothScanner.readCharacteristic(found.charInfo);
           showDeviceDetail(deviceId);
         } catch (_) {
           btn.disabled = false;
@@ -648,18 +995,12 @@ document.addEventListener('DOMContentLoaded', () => {
     content.querySelectorAll('.btn-char-notify').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const charUuid = btn.dataset.charUuid;
-        const freshDevices = BluetoothScanner.getDevices();
-        const d = freshDevices.find(x => x.id === btn.dataset.deviceId);
-        if (!d) return;
-        const charInfo = d.characteristics.find(c => normalizeUuid(c.uuid) === normalizeUuid(charUuid));
-        if (!charInfo) return;
+        const found = findDeviceAndChar(btn.dataset.deviceId, btn.dataset.charUuid);
+        if (!found) return;
         btn.disabled = true;
         btn.textContent = 'Subscribing...';
         try {
-          await BluetoothScanner.subscribeNotifications(charInfo, () => {
-            showDeviceDetail(deviceId);
-          });
+          await BluetoothScanner.subscribeNotifications(found.charInfo, () => showDeviceDetail(deviceId));
           btn.textContent = 'Subscribed';
           showToast('Subscribed to notifications', 'success');
         } catch (_) {
@@ -688,16 +1029,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!input) return;
         const hexVal = input.value.trim();
         if (!hexVal) { showToast('Enter a hex value first', 'error'); return; }
-        // Validate hex
         if (!isValidHexInput(hexVal)) {
           showToast('Invalid hex format. Use an even number of bytes (e.g., FF or 01:FF:AB).', 'error');
           return;
         }
-        const freshDevices = BluetoothScanner.getDevices();
-        const d = freshDevices.find(x => x.id === btn.dataset.deviceId);
-        if (!d) return;
-        const charInfo = d.characteristics.find(c => normalizeUuid(c.uuid) === normalizeUuid(charUuid));
-        if (!charInfo) return;
+        const found = findDeviceAndChar(btn.dataset.deviceId, charUuid);
+        if (!found) return;
+        const { charInfo } = found;
         btn.disabled = true;
         btn.textContent = 'Writing...';
         try {
@@ -705,8 +1043,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast('Value written', 'success');
           btn.textContent = 'Sent!';
           setTimeout(() => { btn.textContent = 'Send'; btn.disabled = false; }, 1500);
-          // Re-read to see updated value
-          if (charInfo.properties.includes('read')) {
+          if ((charInfo.properties || []).includes('read')) {
             try {
               await BluetoothScanner.readCharacteristic(charInfo);
               showDeviceDetail(deviceId);
@@ -721,104 +1058,243 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  document.getElementById('btn-back-devices').addEventListener('click', () => {
-    document.getElementById('device-detail').classList.add('hidden');
+  document.getElementById('btn-back-devices')?.addEventListener('click', () => {
+    document.getElementById('device-detail')?.classList.add('hidden');
   });
 
-  // --- Captures / Replay ---
+  // --- Captures / Replay (Replay tab) ---
+  const captureImportInput = document.getElementById('capture-import-input');
+  const btnImportCaptures = document.getElementById('btn-import-captures');
+  btnImportCaptures?.addEventListener('click', () => captureImportInput?.click());
+  captureImportInput?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const count = await Announcements.importCapture(file);
+      renderCaptures();
+      if (count === 0) {
+        showToast('No valid profiles found in file', 'info');
+      } else {
+        showToast(`Imported ${count} profile(s)`, 'success');
+      }
+    } catch (err) {
+      showToast(err?.message || 'Import failed', 'error');
+    }
+    captureImportInput.value = '';
+  });
+
   function renderCaptures() {
-    const capturesSection = document.getElementById('captures-section');
     const capturedList = document.getElementById('captured-list');
     const replaySection = document.getElementById('replay-section');
+    const replayEmptyState = document.getElementById('replay-empty-state');
     const mimicSelect = document.getElementById('mimic-select');
+    const mimicBtn = document.getElementById('btn-mimic');
     const captures = Announcements.getCaptures();
 
     if (captures.length === 0) {
-      capturesSection.style.display = 'none';
+      if (replayEmptyState) replayEmptyState.style.display = 'flex';
+      if (replaySection) replaySection.style.display = 'none';
+      if (capturedList) capturedList.innerHTML = '';
       return;
     }
 
-    capturesSection.style.display = 'block';
+    if (replayEmptyState) replayEmptyState.style.display = 'none';
+    if (replaySection) replaySection.style.display = 'block';
 
-    capturedList.innerHTML = captures.map(cap => `
-      <div class="captured-item">
-        <strong>${escapeHtml(cap.deviceName)}</strong>
-        <div class="captured-detail">${new Date(cap.timestamp).toLocaleString()}</div>
-        <div class="captured-detail">Services: ${cap.services.length} | Chars: ${cap.totalChars} (${cap.readableChars} readable)</div>
-        <button class="btn btn-secondary btn-small btn-export-capture" data-capture-id="${cap.id}">Export JSON</button>
-      </div>
-    `).join('');
+    if (capturedList) {
+      capturedList.innerHTML = captures.map(cap => `
+        <div class="captured-item">
+          <strong>${escapeHtml(cap.deviceName)}</strong>
+          <div class="captured-detail">${new Date(cap.timestamp).toLocaleString()}</div>
+          <div class="captured-detail">Services: ${cap.services.length} | Chars: ${cap.totalChars} (${cap.readableChars} readable)</div>
+          <button class="btn btn-secondary btn-small btn-export-capture" data-capture-id="${cap.id}">Export JSON</button>
+        </div>
+      `).join('');
 
-    capturedList.querySelectorAll('.btn-export-capture').forEach(btn => {
-      btn.addEventListener('click', () => {
-        Announcements.exportCapture(btn.dataset.captureId);
-        showToast('JSON exported', 'success');
+      capturedList.querySelectorAll('.btn-export-capture').forEach(btn => {
+        btn.addEventListener('click', () => {
+          Announcements.exportCapture(btn.dataset.captureId);
+          showToast('JSON exported', 'success');
+        });
       });
-    });
+    }
 
-    // Replay section
     const connected = BluetoothScanner.getConnectedDevice();
-    if (connected) {
-      replaySection.style.display = 'block';
+    if (mimicSelect) {
       mimicSelect.innerHTML = '<option value="">Select captured profile...</option>' +
         captures.map(c => `<option value="${c.id}">${escapeHtml(c.deviceName)} (${new Date(c.timestamp).toLocaleTimeString()})</option>`).join('');
-    } else {
-      replaySection.style.display = 'none';
     }
+    if (mimicBtn) mimicBtn.disabled = !connected || !mimicSelect?.value;
   }
 
   // Mimic select change — use a single handler, not re-bound each render
   const mimicSelect = document.getElementById('mimic-select');
   const mimicBtn = document.getElementById('btn-mimic');
-  mimicSelect.addEventListener('change', () => {
-    mimicBtn.disabled = !mimicSelect.value || !BluetoothScanner.getConnectedDevice();
+  mimicSelect?.addEventListener('change', () => {
+    if (mimicBtn) mimicBtn.disabled = !mimicSelect?.value || !BluetoothScanner.getConnectedDevice();
   });
 
-  mimicBtn.addEventListener('click', async () => {
-    const captureId = mimicSelect.value;
+  mimicBtn?.addEventListener('click', async () => {
+    const captureId = mimicSelect?.value;
     if (!captureId) return;
     const statusEl = document.getElementById('mimic-status');
-    statusEl.textContent = 'Replaying...';
-    statusEl.className = 'mimic-status';
+    if (statusEl) {
+      statusEl.textContent = 'Replaying...';
+      statusEl.className = 'mimic-status';
+    }
     mimicBtn.disabled = true;
     try {
       const result = await Announcements.replayToDevice(captureId);
-      statusEl.textContent = `Done: ${result.written} written, ${result.skipped} skipped, ${result.failed} failed`;
-      statusEl.classList.add('mimic-success');
+      if (statusEl) {
+        statusEl.textContent = `Done: ${result.written} written, ${result.skipped} skipped, ${result.failed} failed`;
+        statusEl.classList.add('mimic-success');
+      }
       showToast('Replay complete', 'success');
     } catch (err) {
-      statusEl.textContent = `Failed: ${err.message}`;
-      statusEl.classList.add('mimic-error');
+      if (statusEl) {
+        statusEl.textContent = `Failed: ${err?.message || 'Unknown error'}`;
+        statusEl.classList.add('mimic-error');
+      }
       showToast('Replay failed', 'error');
     } finally {
       mimicBtn.disabled = false;
     }
   });
 
-  // --- Audio Tab ---
-  document.getElementById('btn-play-dtmf').addEventListener('click', () => {
-    AudioPlayer.playDTMFSequence();
+  // --- Tools Tab: Sound ---
+  document.getElementById('btn-play-dtmf')?.addEventListener('click', () => {
+    if (typeof AudioPlayer === 'undefined') return;
+    const speedEl = document.getElementById('dtmf-speed');
+    const speed = speedEl ? parseFloat(speedEl.value) || 1 : 1;
+    AudioPlayer.playDTMFSequence(speed);
   });
 
-  document.getElementById('btn-play-file').addEventListener('click', () => {
-    AudioPlayer.playFile();
+  document.getElementById('btn-play-custom-dtmf')?.addEventListener('click', () => {
+    if (typeof AudioPlayer === 'undefined') return;
+    const input = document.getElementById('dtmf-custom-input');
+    const seq = input?.value?.trim() || '';
+    if (!seq) {
+      showToast('Enter a DTMF sequence (0-9, *, #, A-D)', 'error');
+      return;
+    }
+    if (!/^[0-9*#A-Da-d]+$/.test(seq)) {
+      showToast('Invalid characters. Use only 0-9, *, #, A-D', 'error');
+      return;
+    }
+    const speedEl = document.getElementById('dtmf-speed');
+    const speed = speedEl ? parseFloat(speedEl.value) || 1 : 1;
+    AudioPlayer.playCustomDTMFSequence(seq, speed);
+    showAudioOverlay();
   });
 
-  document.getElementById('btn-stop-audio').addEventListener('click', () => {
-    AudioPlayer.stopAll();
+  document.getElementById('btn-play-file')?.addEventListener('click', () => {
+    if (typeof AudioPlayer !== 'undefined') AudioPlayer.playFile();
+  });
+
+  document.getElementById('btn-stop-audio')?.addEventListener('click', () => {
+    if (typeof AudioPlayer !== 'undefined') AudioPlayer.stopAll();
     showToast('Audio stopped', 'info');
   });
 
-  // Volume slider
-  const volumeSlider = document.getElementById('volume-slider');
-  const volumeValue = document.getElementById('volume-value');
-  volumeSlider.addEventListener('input', () => {
+  // Volume slider (throttle persist to avoid excessive localStorage writes)
+  const volumeSlider = $('volume-slider');
+  const volumeValue = $('volume-value');
+  let volumePersistTimeout = null;
+  volumeSlider?.addEventListener('input', () => {
     const vol = parseInt(volumeSlider.value, 10);
-    AudioPlayer.setVolume(vol / 100);
-    volumeValue.textContent = vol + '%';
+    if (typeof AudioPlayer !== 'undefined') AudioPlayer.setVolume(vol / 100);
+    if (volumeValue) volumeValue.textContent = vol + '%';
+    const s = getCurrentSettings();
+    if (s.persistVolume) {
+      s.volume = vol;
+      if (volumePersistTimeout) clearTimeout(volumePersistTimeout);
+      volumePersistTimeout = setTimeout(() => {
+        volumePersistTimeout = null;
+        saveSettings(s);
+      }, 150);
+    }
   });
 
-  document.getElementById('btn-silence-all').addEventListener('click', async () => {
+  // --- Tools Tab: Lights (Flash All, Turn Off All, Set Color) ---
+  async function runLightActionOnAllDevices(action, colorHex) {
+    let devices = BluetoothScanner.getDevices().filter(d => d.connected && d.lightTestPlan?.available);
+    if (action === 'color' && colorHex) {
+      devices = devices.filter(d => d.lightTestPlan?.actions?.color);
+    }
+    if (devices.length === 0) {
+      showToast(action === 'color'
+        ? 'No connected RGB lights. Connect color-capable lights in Devices tab first.'
+        : 'No connected smart lights. Connect lights in Devices tab first.', 'error');
+      return;
+    }
+    let success = 0;
+    let fail = 0;
+    for (const dev of devices) {
+      try {
+        if (action === 'color' && colorHex) {
+          await runLightTestActionWithColor(dev.id, colorHex);
+        } else {
+          await runLightTestAction(dev.id, action, null);
+        }
+        success++;
+      } catch (err) {
+        fail++;
+      }
+    }
+    showToast(`Lights: ${success} ok, ${fail} failed`, success > 0 ? 'success' : 'error');
+  }
+
+  async function runLightTestActionWithColor(deviceId, hexColor) {
+    const devices = BluetoothScanner.getDevices();
+    const dev = devices.find(d => d.id === deviceId);
+    if (!dev || !dev.connected) throw new Error('Device not connected');
+    const plan = dev.lightTestPlan;
+    if (!plan?.available || !plan.targetCharUuid) throw new Error('No light plan');
+    const targetChar = (dev.characteristics || []).find(ch =>
+      normalizeUuid(ch.uuid) === normalizeUuid(plan.targetCharUuid)
+    );
+    if (!targetChar) throw new Error('Characteristic not found');
+    const hex = String(hexColor || '#ff0000').replace(/^#/, '').slice(0, 6);
+    if (hex.length < 6) throw new Error('Invalid color format');
+    const r = Math.min(255, Math.max(0, parseInt(hex.slice(0, 2), 16) || 0));
+    const g = Math.min(255, Math.max(0, parseInt(hex.slice(2, 4), 16) || 0));
+    const b = Math.min(255, Math.max(0, parseInt(hex.slice(4, 6), 16) || 0));
+    const colorHex = [r, g, b].map(v => v.toString(16).padStart(2, '0')).join(':');
+    await BluetoothScanner.writeCharacteristic(targetChar, colorHex);
+  }
+
+  document.getElementById('btn-flash-all-lights')?.addEventListener('click', async () => {
+    await runLightActionOnAllDevices('flash');
+  });
+
+  document.getElementById('btn-off-all-lights')?.addEventListener('click', async () => {
+    await runLightActionOnAllDevices('off');
+  });
+
+  document.getElementById('btn-set-color-all-lights')?.addEventListener('click', async () => {
+    const hexInput = document.getElementById('light-color-hex');
+    const picker = document.getElementById('light-color-picker');
+    const hex = (hexInput?.value || picker?.value || '#ff0000').trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
+      showToast('Enter valid hex color (e.g. #ff0000)', 'error');
+      return;
+    }
+    await runLightActionOnAllDevices('color', hex);
+  });
+
+  const lightColorPicker = document.getElementById('light-color-picker');
+  const lightColorHex = document.getElementById('light-color-hex');
+  lightColorPicker?.addEventListener('input', () => {
+    if (lightColorHex) lightColorHex.value = lightColorPicker.value;
+  });
+  lightColorHex?.addEventListener('input', () => {
+    const v = lightColorHex.value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(v) && lightColorPicker) {
+      lightColorPicker.value = v;
+    }
+  });
+
+  document.getElementById('btn-silence-all')?.addEventListener('click', async () => {
     const devices = BluetoothScanner.getDevices();
     const connCount = devices.filter(d => d.connected).length;
     if (connCount > 0) {
@@ -858,16 +1334,122 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast(ok ? 'Link shared' : 'Link copied to clipboard', ok ? 'success' : 'info');
   });
 
+  // --- Macros ---
+  function renderMacros() {
+    const list = document.getElementById('macros-list');
+    const form = document.getElementById('macro-form');
+    if (!list) return;
+    const macros = typeof Macros !== 'undefined' ? Macros.getMacros() : [];
+    if (macros.length === 0) {
+      list.innerHTML = '<div class="macros-empty">No macros yet. Add one to automate light tests.</div>';
+    } else {
+      list.innerHTML = macros.map(m => `
+        <div class="macro-item" data-macro-id="${escapeHtml(m.id)}">
+          <div class="macro-item-name">${escapeHtml(m.name)}</div>
+          <div class="macro-item-steps">${(m.steps || []).length} steps</div>
+          <div class="macro-item-actions">
+            <button class="btn btn-primary btn-small btn-run-macro" data-macro-id="${escapeHtml(m.id)}">Run</button>
+            <button class="btn btn-danger btn-small btn-delete-macro" data-macro-id="${escapeHtml(m.id)}">Delete</button>
+          </div>
+        </div>
+      `).join('');
+      list.querySelectorAll('.btn-run-macro').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.macroId;
+          await runMacroById(id);
+        });
+      });
+      list.querySelectorAll('.btn-delete-macro').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.macroId;
+          const m = Macros.getMacro(id);
+          const confirmed = await showConfirm('Delete Macro', `Delete "${m?.name || id}"?`);
+          if (confirmed) {
+            Macros.deleteMacro(id);
+            renderMacros();
+            showToast('Macro deleted', 'info');
+          }
+        });
+      });
+    }
+    if (form) form.classList.add('hidden');
+  }
+
+  async function runMacroById(macroId) {
+    const executor = {
+      delay: (ms) => sleep(ms),
+      lightAction: async (action, colorHex, deviceId) => {
+        if (deviceId && deviceId !== 'all') {
+          if (action === 'color' && colorHex) {
+            await runLightTestActionWithColor(deviceId, colorHex);
+          } else {
+            await runLightTestAction(deviceId, action, null);
+          }
+        } else {
+          await runLightActionOnAllDevices(action, action === 'color' ? colorHex : null);
+        }
+      },
+      replay: (captureId) => Announcements.replayToDevice(captureId),
+      connectDevice: (deviceId) => BluetoothScanner.connect(deviceId)
+    };
+    try {
+      const result = await Macros.runMacro(macroId, executor);
+      showToast(`Macro done: ${result.success} ok, ${result.failed} failed`, result.failed > 0 ? 'info' : 'success');
+    } catch (err) {
+      showToast(err?.message || 'Macro failed', 'error');
+    }
+  }
+
+  document.getElementById('btn-add-macro')?.addEventListener('click', () => {
+    const form = document.getElementById('macro-form');
+    const nameInput = document.getElementById('macro-name-input');
+    if (form && nameInput) {
+      nameInput.value = '';
+      nameInput.placeholder = 'Macro name (e.g. Quick Light Test)';
+      document.getElementById('macro-steps-preview').textContent = 'Preset: delay → flash → delay → off';
+      form.classList.remove('hidden');
+    }
+  });
+
+  document.getElementById('btn-save-macro')?.addEventListener('click', () => {
+    const nameInput = document.getElementById('macro-name-input');
+    const name = (nameInput?.value || '').trim() || 'Quick Light Test';
+    const steps = [
+      { type: 'delay', ms: 500 },
+      { type: 'light_flash', deviceId: 'all' },
+      { type: 'delay', ms: 1000 },
+      { type: 'light_off', deviceId: 'all' }
+    ];
+    Macros.createMacro(name, steps);
+    document.getElementById('macro-form')?.classList.add('hidden');
+    renderMacros();
+    showToast(`Macro "${name}" created`, 'success');
+  });
+
+  document.getElementById('btn-cancel-macro')?.addEventListener('click', () => {
+    document.getElementById('macro-form')?.classList.add('hidden');
+  });
+
+  renderMacros();
+
   // --- Audio Overlay ---
   function showAudioOverlay() {
     const overlay = document.getElementById('audio-overlay');
-    if (overlay) overlay.classList.remove('hidden');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+      overlay.setAttribute('aria-hidden', 'false');
+    }
   }
 
-  document.getElementById('btn-close-audio-overlay').addEventListener('click', () => {
+  document.getElementById('btn-close-audio-overlay')?.addEventListener('click', () => {
     const overlay = document.getElementById('audio-overlay');
-    if (overlay) overlay.classList.add('hidden');
-    AudioPlayer.stopAll();
+    if (overlay) {
+      overlay.classList.add('hidden');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+    if (typeof AudioPlayer !== 'undefined') AudioPlayer.stopAll();
   });
 
   // --- Advanced / Agent Tab ---
@@ -879,43 +1461,141 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnAgentStop = document.getElementById('btn-agent-stop');
   const btnAgentFull = document.getElementById('btn-agent-full');
   const btnAgentQuick = document.getElementById('btn-agent-quick');
+  const btnAgentParallel = document.getElementById('btn-agent-parallel');
+  const btnAgentStopAll = document.getElementById('btn-agent-stop-all');
+  const parallelStatusCard = document.getElementById('parallel-status-card');
+  const parallelDeviceCount = document.getElementById('parallel-device-count');
+  const aggregateResultsCard = document.getElementById('aggregate-results-card');
+
+  function updateParallelDeviceCount() {
+    const allDevices = BluetoothScanner.getDevices();
+    const available = allDevices.filter(d => !d.connected).length;
+    if (parallelDeviceCount) {
+      parallelDeviceCount.textContent = `${available} device${available !== 1 ? 's' : ''} available for parallel scan`;
+    }
+  }
+
+  function updateAgentButtons() {
+    const running = Advanced.isRunning();
+    if (btnAgentStop) btnAgentStop.disabled = !running;
+    if (btnAgentStopAll) btnAgentStopAll.disabled = !running;
+    if (btnAgentFull) btnAgentFull.disabled = running;
+    if (btnAgentQuick) btnAgentQuick.disabled = running;
+    if (btnAgentParallel) btnAgentParallel.disabled = running;
+  }
+
+  function renderAgentPoolList() {
+    const poolList = document.getElementById('agent-pool-list');
+    if (!poolList) return;
+    const agentList = Advanced.getAgents();
+    if (agentList.length === 0) {
+      poolList.innerHTML = '';
+      return;
+    }
+
+    poolList.innerHTML = agentList.map(agent => {
+      const stateClass = 'agent-' + agent.state;
+      const elapsed = agent.endTime && agent.startTime
+        ? ((agent.endTime - agent.startTime) / 1000).toFixed(1)
+        : agent.startTime
+          ? (((Date.now()) - agent.startTime) / 1000).toFixed(1)
+          : '—';
+      const lastMsg = agent.log.length > 0 ? agent.log[agent.log.length - 1].message : '';
+      return `
+        <div class="agent-pool-item ${stateClass}">
+          <div class="agent-pool-header">
+            <span class="agent-pool-name">#${agent.id} ${escapeHtml(agent.deviceName)}</span>
+            <span class="agent-badge agent-badge-sm ${stateClass}">${agent.state}</span>
+          </div>
+          <div class="agent-pool-detail">
+            <span class="agent-pool-time">${elapsed}s</span>
+            <span class="agent-pool-msg">${escapeHtml(lastMsg)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const counts = Advanced.getAgentCount();
+    const runningEl = document.getElementById('parallel-running');
+    const completedEl = document.getElementById('parallel-completed');
+    const totalEl = document.getElementById('parallel-total');
+    if (runningEl) runningEl.textContent = `${counts.running} running`;
+    if (completedEl) completedEl.textContent = `${counts.completed} done`;
+    if (totalEl) totalEl.textContent = `${counts.total} total`;
+  }
 
   Advanced.setOnStatus((entry) => {
-    agentStatusCard.style.display = 'block';
-    agentBadge.textContent = entry.state;
-    agentBadge.className = 'agent-badge agent-' + entry.state;
+    if (agentStatusCard) agentStatusCard.style.display = 'block';
+    if (agentBadge) {
+      agentBadge.textContent = entry.state;
+      agentBadge.className = 'agent-badge agent-' + entry.state;
+    }
 
     const line = document.createElement('div');
     line.className = 'agent-feed-line';
+    const prefix = entry.agentId ? `[#${entry.agentId}] ` : '';
     line.innerHTML = `<span class="agent-feed-time">${new Date(entry.time).toLocaleTimeString()}</span>
-      <span class="agent-feed-msg">${escapeHtml(entry.message)}</span>`;
-    agentFeed.appendChild(line);
-    agentFeed.scrollTop = agentFeed.scrollHeight;
+      <span class="agent-feed-msg">${escapeHtml(prefix + entry.message)}</span>`;
+    if (agentFeed) {
+      agentFeed.appendChild(line);
+      agentFeed.scrollTop = agentFeed.scrollHeight;
+    }
 
-    if (entry.state === 'complete' && entry.data && entry.data.analysis) {
+    if (entry.state === 'complete' && entry.data && entry.data.analysis && !entry.data.agentResults) {
       renderAgentResults(entry.data);
     }
 
-    const isRunning = Advanced.isRunning();
-    btnAgentStop.disabled = !isRunning;
-    btnAgentFull.disabled = isRunning;
-    btnAgentQuick.disabled = isRunning;
+    updateAgentButtons();
+    renderAgentPoolList();
+  });
+
+  Advanced.setOnAggregate((event) => {
+    if (event.type === 'start') {
+      parallelStatusCard.style.display = 'block';
+      renderAgentPoolList();
+    } else if (event.type === 'agent_complete') {
+      renderAgentPoolList();
+    } else if (event.type === 'complete' && event.aggregate) {
+      renderAggregateResults(event.aggregate);
+      renderAgentPoolList();
+      updateAgentButtons();
+    }
   });
 
   btnAgentFull.addEventListener('click', async () => {
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
+    aggregateResultsCard.style.display = 'none';
     document.getElementById('vuln-report-card').style.display = 'none';
     await Advanced.runFullDiscovery();
     renderDeviceList();
+    updateAgentButtons();
   });
 
   btnAgentQuick.addEventListener('click', async () => {
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
+    aggregateResultsCard.style.display = 'none';
     document.getElementById('vuln-report-card').style.display = 'none';
     await Advanced.quickScan();
     renderDeviceList();
+    updateAgentButtons();
+  });
+
+  btnAgentParallel.addEventListener('click', async () => {
+    agentFeed.innerHTML = '';
+    agentResultsCard.style.display = 'none';
+    aggregateResultsCard.style.display = 'none';
+    document.getElementById('vuln-report-card').style.display = 'none';
+    parallelStatusCard.style.display = 'none';
+    Advanced.clearAgents();
+    updateAgentButtons();
+    const results = await Advanced.runParallelDiscovery();
+    renderDeviceList();
+    updateAgentButtons();
+    if (results && results.length > 0) {
+      showToast(`Parallel scan complete — ${results.length} device(s) analyzed`, 'success');
+    }
   });
 
   btnAgentStop.addEventListener('click', () => {
@@ -923,13 +1603,113 @@ document.addEventListener('DOMContentLoaded', () => {
     agentStatusCard.style.display = 'none';
     agentFeed.innerHTML = '';
     agentResultsCard.style.display = 'none';
+    aggregateResultsCard.style.display = 'none';
+    parallelStatusCard.style.display = 'none';
     document.getElementById('vuln-report-card').style.display = 'none';
     agentBadge.textContent = 'idle';
     agentBadge.className = 'agent-badge agent-idle';
     btnAgentStop.disabled = true;
+    btnAgentStopAll.disabled = true;
     btnAgentFull.disabled = false;
     btnAgentQuick.disabled = false;
+    btnAgentParallel.disabled = false;
     showToast('Agent stopped', 'info');
+  });
+
+  btnAgentStopAll.addEventListener('click', () => {
+    Advanced.stop();
+    parallelStatusCard.style.display = 'none';
+    agentStatusCard.style.display = 'none';
+    agentFeed.innerHTML = '';
+    agentResultsCard.style.display = 'none';
+    aggregateResultsCard.style.display = 'none';
+    document.getElementById('vuln-report-card').style.display = 'none';
+    agentBadge.textContent = 'idle';
+    agentBadge.className = 'agent-badge agent-idle';
+    updateAgentButtons();
+    showToast('All agents stopped', 'info');
+  });
+
+  function renderAggregateResults(aggregate) {
+    if (!aggregate) return;
+    aggregateResultsCard.style.display = 'block';
+
+    const statsEl = document.getElementById('aggregate-stats');
+    const resultsEl = document.getElementById('aggregate-results');
+
+    statsEl.innerHTML = [
+      `Devices: ${aggregate.totalDevices}`,
+      `Services: ${aggregate.totalServices}`,
+      `Characteristics: ${aggregate.totalCharacteristics}`,
+      `Readable: ${aggregate.totalReadable}`,
+      `Writable: ${aggregate.totalWritable}`,
+      `High Risk: ${aggregate.highRiskDevices}`
+    ].map(s => `<span class="aggregate-stat">${s}</span>`).join('');
+
+    const a = aggregate.analysis || {};
+    const summary = Array.isArray(a.summary) ? a.summary : [];
+    const riskFactors = Array.isArray(a.riskFactors) ? a.riskFactors : [];
+    const recommendations = Array.isArray(a.recommendations) ? a.recommendations : [];
+
+    let html = '<div class="agent-results-section">';
+    html += '<h3>Summary</h3>';
+    html += '<ul>' + summary.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
+
+    if (riskFactors.length > 0) {
+      html += '<h3>Findings</h3>';
+      html += '<ul class="agent-risks">' +
+        riskFactors.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
+    }
+
+    if (recommendations.length > 0) {
+      html += '<h3>Recommendations</h3>';
+      html += '<ul>' + recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
+    }
+
+    html += '</div>';
+
+    if (aggregate.agentResults) {
+      html += '<h3 style="margin-top:12px;">Per-Device Results</h3>';
+      for (const r of aggregate.agentResults) {
+        if (!r.analysis) continue;
+        html += `<div class="per-device-result">`;
+        html += `<div class="per-device-header">${escapeHtml(r.deviceName || 'Unknown')}</div>`;
+        html += `<div class="per-device-stats">${r.servicesFound} svc, ${r.characteristicsFound} char, ${r.readableValues} read, ${r.writableChars} write</div>`;
+        if (r.vulnReport) {
+          html += `<div class="per-device-risk risk-${r.vulnReport.riskLevel.toLowerCase()}">${r.vulnReport.riskLevel} (${r.vulnReport.riskScore}/100)</div>`;
+        }
+        html += `</div>`;
+      }
+    }
+
+    resultsEl.innerHTML = html;
+
+    const highestRiskResult = aggregate.agentResults?.find(r => r.vulnReport);
+    if (highestRiskResult?.vulnReport) {
+      renderVulnReport(highestRiskResult.vulnReport);
+    }
+  }
+
+  BluetoothScanner.setOnDeviceFound(() => {
+    renderDeviceList();
+    updateParallelDeviceCount();
+  });
+
+  BluetoothScanner.setOnConnectionChange((info, connected, context) => {
+    renderDeviceList();
+    updateParallelDeviceCount();
+    updateQuickReconnectUI();
+    const displayName = getDisplayName(info);
+    if (connected) {
+      saveLastConnected(info.id);
+      if (context?.source !== 'agent') {
+        showAudioOverlay();
+        AudioPlayer.triggerOnConnect();
+      }
+      showToast(`Connected to ${displayName}`, 'success');
+    } else {
+      showToast(`Disconnected from ${displayName}`, 'info');
+    }
   });
 
   function renderAgentResults(data) {
@@ -1072,10 +1852,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!callList) return;
     const calls = typeof CallHistory !== 'undefined' ? CallHistory.getCalls() : [];
     if (calls.length === 0) {
-      callList.innerHTML = `<div class="empty-state">
-        <div class="empty-icon">&#x1F4DE;</div>
+      callList.innerHTML = `<div class="empty-state" id="calls-empty-state">
+        <div class="empty-icon" aria-hidden="true">&#x1F4DE;</div>
         <p>No calls imported yet</p>
-        <p class="empty-hint">Import a CSV or JSON file to view call history</p>
+        <p class="empty-hint">Export from iPhone Settings → Phone, or use a call history backup app, then import the file here.</p>
+        <button type="button" class="empty-cta" id="empty-cta-import-calls" aria-label="Import call history">Import Calls</button>
       </div>`;
       return;
     }
@@ -1089,13 +1870,82 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   }
 
+  // --- Settings Tab ---
+  document.querySelectorAll('.settings-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const panelId = 'panel-' + btn.dataset.toggle;
+      const panel = document.getElementById(panelId);
+      const expanded = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', !expanded);
+      panel?.classList.toggle('open', !expanded);
+    });
+  });
+
+  document.getElementById('setting-theme-dark')?.addEventListener('change', () => {
+    const s = getCurrentSettings();
+    s.themeDark = document.getElementById('setting-theme-dark').checked;
+    saveSettings(s);
+    applySettings(s);
+    showToast(s.themeDark ? 'Dark theme' : 'Light theme', 'info');
+  });
+
+  document.getElementById('setting-persist-volume')?.addEventListener('change', () => {
+    const s = getCurrentSettings();
+    saveSettings(s);
+  });
+
+  document.getElementById('setting-scan-timeout')?.addEventListener('change', () => {
+    const s = getCurrentSettings();
+    saveSettings(s);
+    const scanDurationHint = document.getElementById('scan-duration-hint');
+    if (scanDurationHint) scanDurationHint.value = document.getElementById('setting-scan-timeout').value;
+  });
+
+  document.getElementById('setting-default-sort')?.addEventListener('change', () => {
+    const s = getCurrentSettings();
+    saveSettings(s);
+    const deviceSort = document.getElementById('device-sort');
+    if (deviceSort) {
+      deviceSort.value = document.getElementById('setting-default-sort').value;
+      renderDeviceList();
+    }
+  });
+
+  document.getElementById('setting-default-filter')?.addEventListener('change', () => {
+    const s = getCurrentSettings();
+    saveSettings(s);
+    const deviceFilter = document.getElementById('device-filter');
+    if (deviceFilter) {
+      deviceFilter.value = document.getElementById('setting-default-filter').value;
+      renderDeviceList();
+    }
+  });
+
+  document.getElementById('scan-duration-hint')?.addEventListener('change', () => {
+    const val = document.getElementById('scan-duration-hint').value;
+    const settingScanTimeout = document.getElementById('setting-scan-timeout');
+    if (settingScanTimeout) settingScanTimeout.value = val;
+    const s = getCurrentSettings();
+    s.scanTimeout = parseInt(val, 10);
+    saveSettings(s);
+  });
+
+  document.getElementById('btn-reset-settings')?.addEventListener('click', async () => {
+    const confirmed = await showConfirm('Reset Settings', 'Restore all settings to defaults?');
+    if (!confirmed) return;
+    saveSettings(DEFAULT_SETTINGS);
+    applySettings(DEFAULT_SETTINGS);
+    renderDeviceList();
+    showToast('Settings reset to defaults', 'info');
+  });
+
   // --- Log Tab ---
-  document.getElementById('btn-copy-log').addEventListener('click', () => {
+  document.getElementById('btn-copy-log')?.addEventListener('click', () => {
     Logger.copyToClipboard();
     showToast('Log copied to clipboard', 'success');
   });
 
-  document.getElementById('btn-clear-log').addEventListener('click', async () => {
+  document.getElementById('btn-clear-log')?.addEventListener('click', async () => {
     const confirmed = await showConfirm('Clear Log', 'Clear all log entries?');
     if (!confirmed) return;
     Logger.clear();
@@ -1110,4 +1960,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   Logger.info('Ready. Use Bluefy browser on iOS for full BLE support.');
+  renderCaptures(); // Initial Replay tab state
+  updateQuickReconnectUI(); // Show quick reconnect if last device available
 });

@@ -34,12 +34,16 @@ const requiredFiles = [
   'css/style.css',
   'js/app.js',
   'js/logger.js',
+  'js/browser-compat.js',
+  'js/call-history.js',
   'js/bluetooth-scanner.js',
+  'js/serial-bluetooth.js',
   'js/announcements.js',
   'js/audio-player.js',
   'js/vulnerability.js',
   'js/advanced.js',
   'js/sharing.js',
+  'js/macros.js',
   'audio/dtmf-fax-tones.wav',
   'README.md',
   'sw.js',
@@ -69,7 +73,8 @@ assert(html.includes('manifest.json'), 'Links to manifest.json');
 // Tab structure
 assert(html.includes('data-tab="scanner"'), 'Has scanner tab');
 assert(html.includes('data-tab="devices"'), 'Has devices tab');
-assert(html.includes('data-tab="audio"'), 'Has audio tab');
+assert(html.includes('data-tab="tools"'), 'Has tools tab');
+assert(html.includes('data-tab="replay"'), 'Has replay tab');
 assert(html.includes('data-tab="advanced"'), 'Has advanced/agent tab');
 assert(html.includes('data-tab="log"'), 'Has log tab');
 
@@ -86,14 +91,35 @@ assert(html.includes('id="btn-share-link"'), 'Has share link button');
 assert(html.includes('id="btn-agent-full"'), 'Has full agent button');
 assert(html.includes('id="btn-agent-quick"'), 'Has quick agent button');
 assert(html.includes('id="btn-agent-stop"'), 'Has stop agent button');
+assert(html.includes('id="btn-agent-parallel"'), 'Has parallel discovery button');
+assert(html.includes('id="btn-agent-stop-all"'), 'Has stop all agents button');
+assert(html.includes('id="parallel-status-card"'), 'Has parallel status card');
+assert(html.includes('id="agent-pool-list"'), 'Has agent pool list');
+assert(html.includes('id="parallel-device-count"'), 'Has parallel device count');
+assert(html.includes('id="aggregate-results-card"'), 'Has aggregate results card');
+assert(html.includes('id="parallel-running"'), 'Has parallel running counter');
+assert(html.includes('id="parallel-completed"'), 'Has parallel completed counter');
+assert(html.includes('Parallel Multi-Device'), 'Has parallel discovery section title');
 
 // New v2 elements
 assert(html.includes('id="toast-container"'), 'Has toast container');
 assert(html.includes('id="confirm-dialog"'), 'Has confirm dialog');
 assert(html.includes('id="volume-slider"'), 'Has volume slider');
-assert(html.includes('id="captures-section"'), 'Has captures section in devices tab');
+assert(html.includes('id="captured-list"'), 'Has captured list in replay tab');
+assert(html.includes('id="replay-section"'), 'Has replay section');
 assert(html.includes('id="mimic-select"'), 'Has replay/mimic select');
 assert(html.includes('id="btn-mimic"'), 'Has replay button');
+assert(html.includes('id="btn-import-captures"'), 'Has import captures button');
+assert(html.includes('id="capture-import-input"'), 'Has capture import file input');
+assert(html.includes('id="quick-reconnect-card"'), 'Has quick reconnect card');
+assert(html.includes('id="btn-quick-reconnect"'), 'Has quick reconnect button');
+assert(html.includes('id="quick-reconnect-name"'), 'Has quick reconnect device name');
+assert(html.includes('id="btn-flash-all-lights"'), 'Has flash all lights button');
+assert(html.includes('id="btn-off-all-lights"'), 'Has turn off all lights button');
+assert(html.includes('id="btn-set-color-all-lights"'), 'Has set color button');
+assert(html.includes('id="dtmf-speed"'), 'Has DTMF speed selector');
+assert(html.includes('id="dtmf-custom-input"'), 'Has custom DTMF input');
+assert(html.includes('id="btn-play-custom-dtmf"'), 'Has custom DTMF play button');
 
 // Device detail panel
 assert(html.includes('id="device-detail"'), 'Has device detail panel');
@@ -116,10 +142,14 @@ assert(html.includes('audio-visualizer'), 'Has audio visualizer');
 assert(html.includes('card-disclaimer'), 'Has disclaimer card');
 assert(html.includes('personal testing'), 'Disclaimer mentions personal testing');
 
-// Script load order
+// Script load order (browser-compat must load before bluetooth-scanner for compat matrix)
 const scriptOrder = [
   'js/logger.js',
+  'js/browser-compat.js',
+  'js/call-history.js',
+  'js/macros.js',
   'js/bluetooth-scanner.js',
+  'js/serial-bluetooth.js',
   'js/announcements.js',
   'js/audio-player.js',
   'js/vulnerability.js',
@@ -150,6 +180,7 @@ const jsFiles = [
   'js/vulnerability.js',
   'js/advanced.js',
   'js/sharing.js',
+  'js/macros.js',
 ];
 
 for (const file of jsFiles) {
@@ -223,6 +254,18 @@ assert(appJs.includes('Best suggested test'), 'Shows best test suggestion from G
 
 // Capture/replay in devices tab
 assert(appJs.includes('renderCaptures'), 'Has renderCaptures function');
+assert(appJs.includes('capture-import-input'), 'Wires capture import');
+assert(appJs.includes('Announcements.importCapture'), 'Calls importCapture on import');
+assert(appJs.includes('loadFavorites'), 'Has loadFavorites for device pinning');
+assert(appJs.includes('toggleFavorite'), 'Has toggleFavorite for device pinning');
+assert(appJs.includes('saveLastConnected'), 'Has saveLastConnected for quick reconnect');
+assert(appJs.includes('updateQuickReconnectUI'), 'Has updateQuickReconnectUI');
+assert(appJs.includes('btn-pin'), 'Has pin button in device list');
+assert(appJs.includes('getDeviceNotes'), 'Has getDeviceNotes');
+assert(appJs.includes('setDeviceNotes'), 'Has setDeviceNotes');
+assert(appJs.includes('DEVICE_NOTES_KEY'), 'Uses device notes localStorage key');
+assert(appJs.includes('btn-save-device-notes'), 'Has save device notes button');
+assert(appJs.includes('device-note-badge'), 'Shows note badge in device list');
 assert(appJs.includes('mimic-select'), 'Has mimic select handler');
 assert(appJs.includes('Replay'), 'References Replay functionality');
 
@@ -241,6 +284,53 @@ assert(appJs.includes('agentFeed.innerHTML = \'\''), 'Stop button clears agent f
 assert(appJs.includes('agentResultsCard.style.display = \'none\''), 'Stop button hides agent results');
 assert(appJs.includes('agentBadge.textContent = \'idle\''), 'Stop button resets agent badge');
 
+// Parallel agent UI wiring
+assert(appJs.includes('btn-agent-parallel'), 'Wires parallel discovery button');
+assert(appJs.includes('btn-agent-stop-all'), 'Wires stop all agents button');
+assert(appJs.includes('renderAgentPoolList'), 'Has agent pool list renderer');
+assert(appJs.includes('renderAggregateResults'), 'Has aggregate results renderer');
+assert(appJs.includes('updateParallelDeviceCount'), 'Updates parallel device count');
+assert(appJs.includes('updateAgentButtons'), 'Updates agent button states');
+assert(appJs.includes('runParallelDiscovery'), 'Calls parallel discovery');
+assert(appJs.includes('setOnAggregate'), 'Registers aggregate callback');
+assert(appJs.includes('per-device-result'), 'Renders per-device results');
+assert(appJs.includes('aggregate-stat'), 'Renders aggregate stats');
+assert(appJs.includes('getAgentCount'), 'Uses agent count for progress display');
+assert(appJs.includes('clearAgents'), 'Clears agents before parallel run');
+
+// --- Tools Tab: Flash All, Off All, DTMF Speed, Color ---
+section('Tools Tab Features');
+
+assert(appJs.includes('runLightActionOnAllDevices'), 'Has runLightActionOnAllDevices for bulk light actions');
+assert(appJs.includes('runLightTestActionWithColor'), 'Has runLightTestActionWithColor for color control');
+assert(appJs.includes('btn-flash-all-lights'), 'Wires flash all lights button');
+assert(appJs.includes('btn-off-all-lights'), 'Wires turn off all lights button');
+assert(appJs.includes('btn-set-color-all-lights'), 'Wires set color on all lights button');
+assert(appJs.includes('dtmf-speed'), 'Wires DTMF speed selector to play');
+assert(appJs.includes('btn-play-custom-dtmf'), 'Wires custom DTMF play button');
+assert(appJs.includes('playCustomDTMFSequence'), 'Calls playCustomDTMFSequence for custom sequence');
+assert(appJs.includes('light-color-picker'), 'Wires light color picker');
+assert(appJs.includes('light-color-hex'), 'Wires light color hex input');
+assert(appJs.includes('Enter valid hex color'), 'Validates color input format');
+assert(appJs.includes('No connected smart lights'), 'Shows error when no lights for flash/off');
+assert(appJs.includes('No connected RGB lights'), 'Shows error when no lights for color');
+
+// --- Replay Tab ---
+section('Replay Tab Features');
+
+assert(appJs.includes('renderCaptures'), 'Has renderCaptures for Replay tab');
+assert(appJs.includes('replay-section'), 'Shows/hides replay section based on captures');
+assert(appJs.includes('replay-empty-state'), 'Shows empty state when no captures');
+assert(appJs.includes('mimic-select'), 'Wires mimic select dropdown');
+assert(appJs.includes('btn-mimic'), 'Wires replay button');
+assert(appJs.includes('Announcements.replayToDevice'), 'Calls Announcements.replayToDevice on replay');
+assert(appJs.includes('Replaying...'), 'Shows replaying status during replay');
+assert(appJs.includes('Replay complete'), 'Shows success toast on replay complete');
+assert(appJs.includes('Replay failed'), 'Shows error toast on replay failure');
+assert(appJs.includes('btn-export-capture'), 'Wires export capture button');
+assert(appJs.includes('btn-import-captures'), 'Wires import captures button');
+assert(appJs.includes('empty-cta-devices'), 'Empty state CTA goes to Devices tab');
+
 // --- Audio Player Tests ---
 section('Audio Player Module');
 
@@ -255,9 +345,12 @@ assert(audioJs.includes('triggerOnConnect'), 'Has triggerOnConnect');
 assert(audioJs.includes('setVolume'), 'Has setVolume');
 assert(audioJs.includes('getVolume'), 'Has getVolume');
 assert(audioJs.includes('masterVolume'), 'Has master volume control');
+assert(audioJs.includes('playCustomDTMFSequence'), 'Has playCustomDTMFSequence');
 assert(audioJs.includes('pendingTimeouts'), 'Tracks pending timeouts for cleanup');
 assert(audioJs.includes('[697, 1209]'), 'Correct DTMF freq for digit 1');
 assert(audioJs.includes('[941, 1336]'), 'Correct DTMF freq for digit 0');
+assert(audioJs.includes('speed = 1'), 'playDTMFSequence accepts speed parameter');
+assert(audioJs.includes('Math.max(0.25, Math.min(4'), 'DTMF speed clamped to valid range');
 
 // --- Vulnerability Module Tests ---
 section('Vulnerability Assessment Module');
@@ -299,6 +392,26 @@ assert(advJs.includes('runParallelReadAgents'), 'Uses parallel read agent worker
 assert(advJs.includes('PARALLEL_READ_AGENT_LIMIT'), 'Defines read agent concurrency limit');
 assert(advJs.includes('Promise.all(readAgents)'), 'Runs read agents in parallel');
 
+// Parallel multi-agent features
+assert(advJs.includes('runParallelDiscovery'), 'Has parallel discovery function');
+assert(advJs.includes('MAX_CONCURRENT_AGENTS'), 'Defines max concurrent agents limit');
+assert(advJs.includes('CHAR_READ_BATCH_SIZE'), 'Defines characteristic read batch size');
+assert(advJs.includes('createAgent'), 'Has agent factory function');
+assert(advJs.includes('agents'), 'Uses agent pool map');
+assert(advJs.includes('getAgents'), 'Exposes agent list');
+assert(advJs.includes('getAgentCount'), 'Exposes agent count helper');
+assert(advJs.includes('stopAgent'), 'Can stop individual agents');
+assert(advJs.includes('clearAgents'), 'Can clear all agents');
+assert(advJs.includes('setOnAggregate'), 'Has aggregate status callback');
+assert(advJs.includes('parallelReadCharacteristics'), 'Has parallel characteristic read function');
+assert(advJs.includes('Promise.allSettled'), 'Uses Promise.allSettled for parallel operations');
+assert(advJs.includes('buildAggregateResults'), 'Builds aggregate results from parallel runs');
+assert(advJs.includes('QUEUED'), 'Has QUEUED agent state for pool scheduling');
+assert(advJs.includes('globalStopRequested'), 'Has global stop flag for multi-agent control');
+assert(advJs.includes('runAgentDiscovery'), 'Has per-agent discovery pipeline');
+assert(advJs.includes('agentId'), 'Tracks agent ID in status entries');
+assert(advJs.includes('concurrencyLimit'), 'Implements concurrency limiting');
+
 // --- Sharing Module Tests ---
 section('Sharing Module');
 
@@ -338,6 +451,13 @@ assert(annJs.includes('targetService'), 'Matches replay writes by service + char
 assert(annJs.includes('deviceInfo.id !== profile.deviceId'), 'Checks replay target device ID');
 assert(annJs.includes('overlapRatio < 0.5'), 'Requires meaningful service overlap for cross-device replay');
 assert(annJs.includes('normalizeUuid'), 'Normalizes UUIDs before matching during replay');
+assert(annJs.includes('getCaptures'), 'Exposes getCaptures for capture list');
+assert(annJs.includes('clearCaptures'), 'Exposes clearCaptures');
+assert(annJs.includes('exportCapture'), 'Exposes exportCapture for JSON export');
+assert(annJs.includes('importCapture'), 'Exposes importCapture for JSON import');
+assert(annJs.includes('written, skipped, failed'), 'Replay returns written/skipped/failed counts');
+assert(annJs.includes('captureFromDevice'), 'Has captureFromDevice');
+assert(annJs.includes('captureFromDeviceId'), 'Has captureFromDeviceId with options');
 
 // --- CSS Tests ---
 section('CSS Quality');
@@ -357,6 +477,9 @@ assert(css.includes('.toast-success'), 'Toast success styles');
 assert(css.includes('.toast-error'), 'Toast error styles');
 assert(css.includes('.confirm-buttons'), 'Confirm dialog styles');
 assert(css.includes('.volume-slider'), 'Volume slider styles');
+assert(css.includes('.custom-dtmf-row'), 'Custom DTMF row styles');
+assert(css.includes('.device-note-badge'), 'Device note badge styles');
+assert(css.includes('.device-notes-textarea'), 'Device notes textarea styles');
 assert(css.includes('.volume-control'), 'Volume control styles');
 assert(css.includes('.char-write-form'), 'Write form styles');
 assert(css.includes('.char-write-input'), 'Write input styles');
@@ -376,6 +499,21 @@ assert(css.includes('.vuln-risk-medium'), 'Medium risk styling');
 assert(css.includes('.vuln-risk-low'), 'Low risk styling');
 assert(css.includes('.vuln-rec'), 'Vulnerability recommendation styles');
 assert(css.includes('.agent-vuln_assess'), 'Agent vuln_assess state styling');
+assert(css.includes('.agent-queued'), 'Agent queued state styling');
+assert(css.includes('.parallel-device-count'), 'Parallel device count styles');
+assert(css.includes('.parallel-header'), 'Parallel header styles');
+assert(css.includes('.parallel-progress'), 'Parallel progress styles');
+assert(css.includes('.parallel-counter'), 'Parallel counter styles');
+assert(css.includes('.agent-pool-list'), 'Agent pool list styles');
+assert(css.includes('.agent-pool-item'), 'Agent pool item styles');
+assert(css.includes('.agent-pool-header'), 'Agent pool header styles');
+assert(css.includes('.agent-badge-sm'), 'Small agent badge styles');
+assert(css.includes('.aggregate-stats'), 'Aggregate stats styles');
+assert(css.includes('.aggregate-stat'), 'Aggregate stat chip styles');
+assert(css.includes('.per-device-result'), 'Per-device result styles');
+assert(css.includes('.per-device-risk'), 'Per-device risk styles');
+assert(css.includes('.counter-running'), 'Running counter styles');
+assert(css.includes('.counter-completed'), 'Completed counter styles');
 assert(!css.includes('rickroll'), 'No rickroll in CSS');
 
 // --- Audio File Tests ---
@@ -415,6 +553,7 @@ assert(readme.includes('DTMF'), 'DTMF documented');
 assert(readme.includes('AirDrop'), 'AirDrop documented');
 assert(readme.includes('Agentic'), 'Agentic documented');
 assert(readme.includes('Silence'), 'Silence documented');
+assert(readme.includes('Tools') && readme.includes('Replay'), 'Tools and Replay tabs documented');
 assert(!readme.includes('rickroll'), 'No rickroll in README');
 
 // --- Summary ---
