@@ -243,6 +243,26 @@ document.addEventListener('DOMContentLoaded', () => {
     return loadFavorites().includes(deviceId);
   }
 
+  function saveLastConnected(deviceId) {
+    try {
+      localStorage.setItem(LAST_CONNECTED_KEY, deviceId);
+    } catch (_) { /* ignore */ }
+  }
+
+  function loadLastConnected() {
+    try {
+      return localStorage.getItem(LAST_CONNECTED_KEY) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  function clearLastConnected() {
+    try {
+      localStorage.removeItem(LAST_CONNECTED_KEY);
+    } catch (_) { /* ignore */ }
+  }
+
   function applySettings(settings) {
     document.documentElement.setAttribute('data-theme', settings.themeDark ? 'dark' : 'light');
     const themeColor = document.querySelector('meta[name="theme-color"]');
@@ -500,7 +520,9 @@ document.addEventListener('DOMContentLoaded', () => {
       `Remove ${devices.length} device(s) from the list? Connected devices will be disconnected.`);
     if (!confirmed) return;
     BluetoothScanner.clearDevices();
+    clearLastConnected();
     renderDeviceList();
+    updateQuickReconnectUI();
     showToast('Device list cleared', 'info');
   });
 
@@ -621,7 +643,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Update captures section
     renderCaptures();
+    updateQuickReconnectUI();
   }
+
+  function updateQuickReconnectUI() {
+    const card = $('quick-reconnect-card');
+    const nameEl = $('quick-reconnect-name');
+    if (!card || !nameEl) return;
+
+    const lastId = loadLastConnected();
+    const devices = BluetoothScanner.getDevices();
+    const dev = devices.find(d => d.id === lastId);
+
+    if (lastId && dev && !dev.connected) {
+      card.classList.remove('hidden');
+      nameEl.textContent = getDisplayName(dev);
+    } else {
+      card.classList.add('hidden');
+    }
+  }
+
+  $('btn-quick-reconnect')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
+    const lastId = loadLastConnected();
+    if (!lastId) return;
+    btn.disabled = true;
+    const nameEl = $('quick-reconnect-name');
+    const origName = nameEl?.textContent || 'Device';
+    if (nameEl) nameEl.textContent = 'Connecting...';
+    try {
+      await BluetoothScanner.connect(lastId);
+      renderDeviceList();
+    } catch (_) {
+      showToast('Connection failed', 'error');
+      if (nameEl) nameEl.textContent = origName;
+    } finally {
+      btn.disabled = false;
+      const dev = BluetoothScanner.getDevice(lastId);
+      if (nameEl) nameEl.textContent = dev ? getDisplayName(dev) : origName;
+    }
+  });
 
   // --- Device Detail Panel ---
   function showDeviceDetail(deviceId) {
@@ -1069,6 +1131,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('btn-play-custom-dtmf')?.addEventListener('click', () => {
+    if (typeof AudioPlayer === 'undefined') return;
     const input = document.getElementById('dtmf-custom-input');
     const seq = input?.value?.trim() || '';
     if (!seq) {
@@ -1094,9 +1157,10 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('Audio stopped', 'info');
   });
 
-  // Volume slider
-  const volumeSlider = document.getElementById('volume-slider');
-  const volumeValue = document.getElementById('volume-value');
+  // Volume slider (throttle persist to avoid excessive localStorage writes)
+  const volumeSlider = $('volume-slider');
+  const volumeValue = $('volume-value');
+  let volumePersistTimeout = null;
   volumeSlider?.addEventListener('input', () => {
     const vol = parseInt(volumeSlider.value, 10);
     if (typeof AudioPlayer !== 'undefined') AudioPlayer.setVolume(vol / 100);
@@ -1104,7 +1168,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const s = getCurrentSettings();
     if (s.persistVolume) {
       s.volume = vol;
-      saveSettings(s);
+      if (volumePersistTimeout) clearTimeout(volumePersistTimeout);
+      volumePersistTimeout = setTimeout(() => {
+        volumePersistTimeout = null;
+        saveSettings(s);
+      }, 150);
     }
   });
 
@@ -1226,6 +1294,106 @@ document.addEventListener('DOMContentLoaded', () => {
     );
     showToast(ok ? 'Link shared' : 'Link copied to clipboard', ok ? 'success' : 'info');
   });
+
+  // --- Macros ---
+  function renderMacros() {
+    const list = document.getElementById('macros-list');
+    const form = document.getElementById('macro-form');
+    if (!list) return;
+    const macros = typeof Macros !== 'undefined' ? Macros.getMacros() : [];
+    if (macros.length === 0) {
+      list.innerHTML = '<div class="macros-empty">No macros yet. Add one to automate light tests.</div>';
+    } else {
+      list.innerHTML = macros.map(m => `
+        <div class="macro-item" data-macro-id="${escapeHtml(m.id)}">
+          <div class="macro-item-name">${escapeHtml(m.name)}</div>
+          <div class="macro-item-steps">${(m.steps || []).length} steps</div>
+          <div class="macro-item-actions">
+            <button class="btn btn-primary btn-small btn-run-macro" data-macro-id="${escapeHtml(m.id)}">Run</button>
+            <button class="btn btn-danger btn-small btn-delete-macro" data-macro-id="${escapeHtml(m.id)}">Delete</button>
+          </div>
+        </div>
+      `).join('');
+      list.querySelectorAll('.btn-run-macro').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.macroId;
+          await runMacroById(id);
+        });
+      });
+      list.querySelectorAll('.btn-delete-macro').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.macroId;
+          const m = Macros.getMacro(id);
+          const confirmed = await showConfirm('Delete Macro', `Delete "${m?.name || id}"?`);
+          if (confirmed) {
+            Macros.deleteMacro(id);
+            renderMacros();
+            showToast('Macro deleted', 'info');
+          }
+        });
+      });
+    }
+    if (form) form.classList.add('hidden');
+  }
+
+  async function runMacroById(macroId) {
+    const executor = {
+      delay: (ms) => sleep(ms),
+      lightAction: async (action, colorHex, deviceId) => {
+        if (deviceId && deviceId !== 'all') {
+          if (action === 'color' && colorHex) {
+            await runLightTestActionWithColor(deviceId, colorHex);
+          } else {
+            await runLightTestAction(deviceId, action, null);
+          }
+        } else {
+          await runLightActionOnAllDevices(action, action === 'color' ? colorHex : null);
+        }
+      },
+      replay: (captureId) => Announcements.replayToDevice(captureId),
+      connectDevice: (deviceId) => BluetoothScanner.connect(deviceId)
+    };
+    try {
+      const result = await Macros.runMacro(macroId, executor);
+      showToast(`Macro done: ${result.success} ok, ${result.failed} failed`, result.failed > 0 ? 'info' : 'success');
+    } catch (err) {
+      showToast(err?.message || 'Macro failed', 'error');
+    }
+  }
+
+  document.getElementById('btn-add-macro')?.addEventListener('click', () => {
+    const form = document.getElementById('macro-form');
+    const nameInput = document.getElementById('macro-name-input');
+    if (form && nameInput) {
+      nameInput.value = '';
+      nameInput.placeholder = 'Macro name (e.g. Quick Light Test)';
+      document.getElementById('macro-steps-preview').textContent = 'Preset: delay → flash → delay → off';
+      form.classList.remove('hidden');
+    }
+  });
+
+  document.getElementById('btn-save-macro')?.addEventListener('click', () => {
+    const nameInput = document.getElementById('macro-name-input');
+    const name = (nameInput?.value || '').trim() || 'Quick Light Test';
+    const steps = [
+      { type: 'delay', ms: 500 },
+      { type: 'light_flash', deviceId: 'all' },
+      { type: 'delay', ms: 1000 },
+      { type: 'light_off', deviceId: 'all' }
+    ];
+    Macros.createMacro(name, steps);
+    document.getElementById('macro-form')?.classList.add('hidden');
+    renderMacros();
+    showToast(`Macro "${name}" created`, 'success');
+  });
+
+  document.getElementById('btn-cancel-macro')?.addEventListener('click', () => {
+    document.getElementById('macro-form')?.classList.add('hidden');
+  });
+
+  renderMacros();
 
   // --- Audio Overlay ---
   function showAudioOverlay() {
@@ -1485,8 +1653,10 @@ document.addEventListener('DOMContentLoaded', () => {
   BluetoothScanner.setOnConnectionChange((info, connected, context) => {
     renderDeviceList();
     updateParallelDeviceCount();
+    updateQuickReconnectUI();
     const displayName = getDisplayName(info);
     if (connected) {
+      saveLastConnected(info.id);
       if (context?.source !== 'agent') {
         showAudioOverlay();
         AudioPlayer.triggerOnConnect();
