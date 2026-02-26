@@ -13,7 +13,8 @@ const Delight = (() => {
     if (typeof document === 'undefined' || !document.body) return;
 
     const canvas = document.createElement('canvas');
-    canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
+    canvas.style.cssText =
+      'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
     document.body.appendChild(canvas);
 
     const ctx = canvas.getContext('2d');
@@ -32,7 +33,7 @@ const Delight = (() => {
         vy: (Math.random() - 0.8) * 10 - 2,
         color: colors[Math.floor(Math.random() * colors.length)],
         size: 4 + Math.random() * 6,
-        decay: 0.96 + Math.random() * 0.03
+        decay: 0.96 + Math.random() * 0.03,
       });
     }
 
@@ -92,7 +93,9 @@ const Delight = (() => {
     if (typeof navigator === 'undefined' || !navigator.vibrate) return;
     try {
       navigator.vibrate(pattern);
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   /**
@@ -122,6 +125,10 @@ const Delight = (() => {
     vibrate,
     successBuzz,
     errorBuzz,
-    tapBuzz
+    tapBuzz,
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = Delight;
+}

@@ -8,14 +8,70 @@
  */
 const Macros = (() => {
   const STORAGE_KEY = 'bluettool_macros';
-  const STEP_TYPES = ['delay', 'light_flash', 'light_off', 'light_color', 'replay', 'connect_device'];
+  const STEP_TYPES = [
+    'delay',
+    'light_flash',
+    'light_off',
+    'light_color',
+    'replay',
+    'connect_device',
+  ];
+  const MAX_NAME_LENGTH = 80;
+
+  function log(level, message, data) {
+    if (typeof Logger === 'undefined') return;
+    if (typeof Logger[level] === 'function') Logger[level](message, data);
+  }
+
+  function createMacroId() {
+    return `macro-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function normalizeStep(step) {
+    if (!step || typeof step !== 'object' || !STEP_TYPES.includes(step.type)) {
+      return null;
+    }
+    const normalized = { type: step.type };
+    if (step.type === 'delay') {
+      const ms = Number(step.ms);
+      normalized.ms = Number.isFinite(ms) ? Math.max(0, Math.min(ms, 120000)) : 500;
+      return normalized;
+    }
+    if (step.deviceId !== null && step.deviceId !== undefined) {
+      normalized.deviceId = String(step.deviceId);
+    }
+    if (step.captureId !== null && step.captureId !== undefined) {
+      normalized.captureId = String(step.captureId);
+    }
+    if (step.hex !== null && step.hex !== undefined) {
+      normalized.hex = String(step.hex);
+    }
+    return normalized;
+  }
+
+  function normalizeMacro(macro) {
+    if (!macro || typeof macro !== 'object') return null;
+    const id = String(macro.id || createMacroId());
+    const name =
+      String(macro.name || 'Untitled Macro')
+        .trim()
+        .slice(0, MAX_NAME_LENGTH) || 'Untitled Macro';
+    const steps = Array.isArray(macro.steps) ? macro.steps.map(normalizeStep).filter(Boolean) : [];
+    return {
+      id,
+      name,
+      steps,
+      createdAt: macro.createdAt || new Date().toISOString(),
+      updatedAt: macro.updatedAt || new Date().toISOString(),
+    };
+  }
 
   function loadMacros() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.map(normalizeMacro).filter(Boolean) : [];
     } catch {
       return [];
     }
@@ -23,9 +79,10 @@ const Macros = (() => {
 
   function saveMacros(macros) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(macros));
+      const normalized = Array.isArray(macros) ? macros.map(normalizeMacro).filter(Boolean) : [];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
     } catch (err) {
-      Logger.error('Failed to save macros:', err.message);
+      log('error', `Failed to save macros: ${err.message}`);
     }
   }
 
@@ -34,45 +91,45 @@ const Macros = (() => {
   }
 
   function createMacro(name, steps = []) {
-    const macro = {
-      id: `macro-${Date.now()}`,
-      name: String(name || 'Untitled Macro').trim() || 'Untitled Macro',
-      steps: Array.isArray(steps) ? steps : [],
+    const macro = normalizeMacro({
+      id: createMacroId(),
+      name,
+      steps,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+      updatedAt: new Date().toISOString(),
+    });
     const macros = loadMacros();
     macros.push(macro);
     saveMacros(macros);
-    Logger.info(`Macro created: ${macro.name}`);
+    log('info', `Macro created: ${macro.name}`);
     return macro;
   }
 
   function updateMacro(id, updates) {
     const macros = loadMacros();
-    const idx = macros.findIndex(m => m.id === id);
+    const idx = macros.findIndex((m) => m.id === id);
     if (idx < 0) return null;
-    const updated = {
+    const updated = normalizeMacro({
       ...macros[idx],
       ...updates,
       id: macros[idx].id,
-      updatedAt: new Date().toISOString()
-    };
+      updatedAt: new Date().toISOString(),
+    });
     macros[idx] = updated;
     saveMacros(macros);
-    Logger.info(`Macro updated: ${updated.name}`);
+    log('info', `Macro updated: ${updated.name}`);
     return updated;
   }
 
   function deleteMacro(id) {
-    const macros = loadMacros().filter(m => m.id !== id);
+    const macros = loadMacros().filter((m) => m.id !== id);
     saveMacros(macros);
-    Logger.info(`Macro deleted: ${id}`);
+    log('info', `Macro deleted: ${id}`);
     return true;
   }
 
   function getMacro(id) {
-    return loadMacros().find(m => m.id === id) || null;
+    return loadMacros().find((m) => m.id === id) || null;
   }
 
   /**
@@ -98,7 +155,7 @@ const Macros = (() => {
       try {
         switch (step.type) {
           case 'delay':
-            await executor.delay(step.ms || 500);
+            await executor.delay(Number(step.ms) || 500);
             result.success++;
             break;
           case 'light_flash':
@@ -131,14 +188,11 @@ const Macros = (() => {
               result.errors.push(`Step ${i + 1}: Connect requires deviceId`);
             }
             break;
-          default:
-            result.failed++;
-            result.errors.push(`Step ${i + 1}: Unknown step type "${step.type}"`);
         }
       } catch (err) {
         result.failed++;
         result.errors.push(`Step ${i + 1}: ${err?.message || 'Unknown error'}`);
-        Logger.warn(`Macro step ${i + 1} failed:`, err);
+        log('warn', `Macro step ${i + 1} failed`, err?.message || err);
       }
     }
 
@@ -153,6 +207,10 @@ const Macros = (() => {
     deleteMacro,
     runMacro,
     STEP_TYPES,
-    STORAGE_KEY
+    STORAGE_KEY,
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = Macros;
+}

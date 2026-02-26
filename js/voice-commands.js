@@ -4,7 +4,8 @@
  * Graceful fallback when SpeechRecognition is unavailable (e.g. some browsers).
  */
 const VoiceCommands = (() => {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const root = typeof window !== 'undefined' ? window : {};
+  const SpeechRecognition = root.SpeechRecognition || root.webkitSpeechRecognition;
   let recognition = null;
   let isListening = false;
   let onResult = null;
@@ -12,13 +13,22 @@ const VoiceCommands = (() => {
 
   // Command phrases (lowercase) mapped to action IDs
   const COMMAND_MAP = [
-    { phrases: ['flash', 'flash lights', 'flash all lights', 'flash the lights'], action: 'flash_lights' },
-    { phrases: ['turn off', 'turn off lights', 'lights off', 'off', 'turn off all lights'], action: 'lights_off' },
-    { phrases: ['silence', 'silence all', 'silence everything', 'mute', 'stop all', 'disconnect'], action: 'silence_all' },
+    {
+      phrases: ['flash', 'flash lights', 'flash all lights', 'flash the lights'],
+      action: 'flash_lights',
+    },
+    {
+      phrases: ['turn off', 'turn off lights', 'lights off', 'off', 'turn off all lights'],
+      action: 'lights_off',
+    },
+    {
+      phrases: ['silence', 'silence all', 'silence everything', 'mute', 'stop all', 'disconnect'],
+      action: 'silence_all',
+    },
     { phrases: ['stop', 'stop audio', 'stop music', 'stop sound'], action: 'stop_audio' },
     { phrases: ['scan', 'start scan', 'scan for devices', 'find devices'], action: 'scan' },
-    { phrases: ['set color', 'change color', 'red', 'green', 'blue'], action: 'set_color' },
-    { phrases: ['help', 'what can you do', 'commands'], action: 'help' }
+    { phrases: ['set color', 'change color', 'color'], action: 'set_color' },
+    { phrases: ['help', 'what can you do', 'commands'], action: 'help' },
   ];
 
   function isSupported() {
@@ -32,6 +42,13 @@ const VoiceCommands = (() => {
     if (!transcript || typeof transcript !== 'string') return null;
     const normalized = transcript.trim().toLowerCase();
     if (normalized.length === 0) return null;
+
+    if (
+      parseColorFromTranscript(normalized) &&
+      /(?:set|change).*(?:color)|color/.test(normalized)
+    ) {
+      return 'set_color';
+    }
 
     for (const { phrases, action } of COMMAND_MAP) {
       for (const phrase of phrases) {
@@ -58,7 +75,7 @@ const VoiceCommands = (() => {
       orange: '#ff8800',
       purple: '#8800ff',
       pink: '#ff0088',
-      cyan: '#00ffff'
+      cyan: '#00ffff',
     };
     for (const [name, hex] of Object.entries(colorMap)) {
       if (normalized.includes(name)) return hex;
@@ -96,13 +113,14 @@ const VoiceCommands = (() => {
 
       recognition.onerror = (event) => {
         isListening = false;
-        const msg = event.error === 'no-speech'
-          ? 'No speech detected'
-          : event.error === 'aborted'
-            ? 'Cancelled'
-            : event.error === 'not-allowed'
-              ? 'Microphone permission denied'
-              : `Error: ${event.error}`;
+        const msg =
+          event.error === 'no-speech'
+            ? 'No speech detected'
+            : event.error === 'aborted'
+              ? 'Cancelled'
+              : event.error === 'not-allowed'
+                ? 'Microphone permission denied'
+                : `Error: ${event.error}`;
         if (onStatus) onStatus({ type: 'error', message: msg });
       };
 
@@ -121,7 +139,7 @@ const VoiceCommands = (() => {
             transcript,
             confidence,
             action: action || 'unknown',
-            color: action === 'set_color' ? color : null
+            color: action === 'set_color' ? color : null,
           });
         }
       };
@@ -138,15 +156,18 @@ const VoiceCommands = (() => {
     if (recognition && isListening) {
       try {
         recognition.stop();
-      } catch (_) { /* ignore */ }
+      } catch (_) {
+        /* ignore */
+      }
       isListening = false;
     }
+    recognition = null;
   }
 
   function getAvailableCommands() {
     return COMMAND_MAP.map(({ phrases, action }) => ({
       action,
-      examples: phrases.slice(0, 3)
+      examples: phrases.slice(0, 3),
     }));
   }
 
@@ -166,6 +187,10 @@ const VoiceCommands = (() => {
     parseColorFromTranscript,
     getAvailableCommands,
     setOnResult,
-    setOnStatus
+    setOnStatus,
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = VoiceCommands;
+}

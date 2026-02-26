@@ -6,10 +6,22 @@
  */
 const AudioPlayer = (() => {
   const DTMF_FREQS = {
-    '1': [697, 1209], '2': [697, 1336], '3': [697, 1477], 'A': [697, 1633],
-    '4': [770, 1209], '5': [770, 1336], '6': [770, 1477], 'B': [770, 1633],
-    '7': [852, 1209], '8': [852, 1336], '9': [852, 1477], 'C': [852, 1633],
-    '*': [941, 1209], '0': [941, 1336], '#': [941, 1477], 'D': [941, 1633],
+    1: [697, 1209],
+    2: [697, 1336],
+    3: [697, 1477],
+    A: [697, 1633],
+    4: [770, 1209],
+    5: [770, 1336],
+    6: [770, 1477],
+    B: [770, 1633],
+    7: [852, 1209],
+    8: [852, 1336],
+    9: [852, 1477],
+    C: [852, 1633],
+    '*': [941, 1209],
+    0: [941, 1336],
+    '#': [941, 1477],
+    D: [941, 1633],
   };
 
   const CNG_FREQ = 1100;
@@ -46,11 +58,15 @@ const AudioPlayer = (() => {
 
   function stopAll() {
     stopRequested = true;
-    activeNodes.forEach(n => {
-      try { n.stop(); } catch (_) { /* already stopped */ }
+    activeNodes.forEach((n) => {
+      try {
+        n.stop();
+      } catch (_) {
+        /* already stopped */
+      }
     });
     activeNodes = [];
-    pendingTimeouts.forEach(id => clearTimeout(id));
+    pendingTimeouts.forEach((id) => clearTimeout(id));
     pendingTimeouts = [];
     if (fileAudioEl) {
       fileAudioEl.pause();
@@ -62,8 +78,11 @@ const AudioPlayer = (() => {
   }
 
   function playTone(freq1, freq2, duration, volume) {
-    return new Promise(resolve => {
-      if (stopRequested) { resolve(); return; }
+    return new Promise((resolve) => {
+      if (stopRequested) {
+        resolve();
+        return;
+      }
       const ctx = getContext();
       const scaledVol = (volume || 0.3) * masterVolume;
       const gain = ctx.createGain();
@@ -98,20 +117,26 @@ const AudioPlayer = (() => {
         activeNodes.push(osc2);
       }
 
-      const tid = setTimeout(() => {
-        activeNodes = activeNodes.filter(n => n !== osc1 && n !== osc2);
-        pendingTimeouts = pendingTimeouts.filter(t => t !== tid);
-        resolve();
-      }, duration * 1000 + 20);
+      const tid = setTimeout(
+        () => {
+          activeNodes = activeNodes.filter((n) => n !== osc1 && n !== osc2);
+          pendingTimeouts = pendingTimeouts.filter((t) => t !== tid);
+          resolve();
+        },
+        duration * 1000 + 20,
+      );
       pendingTimeouts.push(tid);
     });
   }
 
   function wait(ms) {
-    return new Promise(resolve => {
-      if (stopRequested) { resolve(); return; }
+    return new Promise((resolve) => {
+      if (stopRequested) {
+        resolve();
+        return;
+      }
       const tid = setTimeout(() => {
-        pendingTimeouts = pendingTimeouts.filter(t => t !== tid);
+        pendingTimeouts = pendingTimeouts.filter((t) => t !== tid);
         resolve();
       }, ms);
       pendingTimeouts.push(tid);
@@ -122,6 +147,7 @@ const AudioPlayer = (() => {
    * Valid DTMF characters: 0-9, *, #, A-D
    */
   const VALID_DTMF = /^[0-9*#A-Da-d]*$/;
+  const MAX_DTMF_SEQUENCE_LENGTH = 64;
 
   /**
    * Play a custom DTMF sequence. Only plays valid DTMF digits; others are skipped.
@@ -132,6 +158,12 @@ const AudioPlayer = (() => {
     if (isPlaying) return;
     const seq = String(sequence || '').trim();
     if (!seq) return;
+    if (!VALID_DTMF.test(seq)) {
+      throw new Error('Invalid DTMF sequence');
+    }
+    if (seq.length > MAX_DTMF_SEQUENCE_LENGTH) {
+      throw new Error(`DTMF sequence too long (max ${MAX_DTMF_SEQUENCE_LENGTH} characters)`);
+    }
     isPlaying = true;
     stopRequested = false;
     const spd = Math.max(0.25, Math.min(4, Number(speed) || 1));
@@ -225,15 +257,18 @@ const AudioPlayer = (() => {
       Logger.info('Audio file playback ended');
     };
 
-    fileAudioEl.play().then(() => {
-      if (!stopRequested) Logger.success('Audio file playback started');
-    }).catch(err => {
-      isPlaying = false;
-      if (!stopRequested) {
-        Logger.error('Could not play audio file: ' + err.message + ' — using live DTMF instead');
-        playDTMFSequence();
-      }
-    });
+    fileAudioEl
+      .play()
+      .then(() => {
+        if (!stopRequested) Logger.success('Audio file playback started');
+      })
+      .catch((err) => {
+        isPlaying = false;
+        if (!stopRequested) {
+          Logger.error('Could not play audio file: ' + err.message + ' — using live DTMF instead');
+          playDTMFSequence();
+        }
+      });
   }
 
   /**
@@ -273,6 +308,10 @@ const AudioPlayer = (() => {
     getIsPlaying,
     setVolume,
     getVolume,
-    DTMF_FREQS
+    DTMF_FREQS,
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = AudioPlayer;
+}

@@ -38,7 +38,7 @@ const Advanced = (() => {
     ANALYZING: 'analyzing',
     MIMICKING: 'mimicking',
     COMPLETE: 'complete',
-    ERROR: 'error'
+    ERROR: 'error',
   };
 
   let currentState = AGENT_STATES.IDLE;
@@ -56,7 +56,7 @@ const Advanced = (() => {
       log: [],
       results: null,
       startTime: null,
-      endTime: null
+      endTime: null,
     };
     agents.set(id, agent);
     return agent;
@@ -70,7 +70,7 @@ const Advanced = (() => {
       message,
       data: data || null,
       agentId: agent.id,
-      deviceName: agent.deviceName
+      deviceName: agent.deviceName,
     };
     agent.log.push(entry);
     if (agent.log.length > MAX_LOG_ENTRIES) {
@@ -87,7 +87,7 @@ const Advanced = (() => {
       time: new Date().toISOString(),
       state,
       message,
-      data: data || null
+      data: data || null,
     };
     discoveryLog.push(entry);
     if (discoveryLog.length > MAX_LOG_ENTRIES) {
@@ -106,9 +106,12 @@ const Advanced = (() => {
   }
 
   function isRunning() {
-    if (currentState !== AGENT_STATES.IDLE &&
-        currentState !== AGENT_STATES.COMPLETE &&
-        currentState !== AGENT_STATES.ERROR) return true;
+    if (
+      currentState !== AGENT_STATES.IDLE &&
+      currentState !== AGENT_STATES.COMPLETE &&
+      currentState !== AGENT_STATES.ERROR
+    )
+      return true;
     for (const agent of agents.values()) {
       if (agent.running) return true;
     }
@@ -166,12 +169,13 @@ const Advanced = (() => {
   function getParallelReadAgentCount(totalReads) {
     const total = Number.isFinite(totalReads) ? Math.max(0, totalReads) : 0;
     if (total === 0) return 0;
-    const hardwareHint = typeof navigator !== 'undefined' && Number.isFinite(navigator.hardwareConcurrency)
-      ? navigator.hardwareConcurrency
-      : PARALLEL_READ_AGENT_LIMIT;
+    const hardwareHint =
+      typeof navigator !== 'undefined' && Number.isFinite(navigator.hardwareConcurrency)
+        ? navigator.hardwareConcurrency
+        : PARALLEL_READ_AGENT_LIMIT;
     const suggested = Math.max(
       PARALLEL_READ_AGENT_MIN,
-      Math.min(PARALLEL_READ_AGENT_LIMIT, Math.floor(hardwareHint / 2) || PARALLEL_READ_AGENT_MIN)
+      Math.min(PARALLEL_READ_AGENT_LIMIT, Math.floor(hardwareHint / 2) || PARALLEL_READ_AGENT_MIN),
     );
     return Math.min(total, suggested);
   }
@@ -190,47 +194,53 @@ const Advanced = (() => {
     emit(
       AGENT_STATES.READING,
       `Launching ${readAgentCount} parallel read agent${readAgentCount === 1 ? '' : 's'} for ${readQueue.length} characteristic reads...`,
-      { readAgents: readAgentCount, totalReads: readQueue.length }
+      { readAgents: readAgentCount, totalReads: readQueue.length },
     );
 
-    const readAgents = Array.from({ length: readAgentCount }, (_, agentIndex) => (async () => {
-      while (true) {
-        if (shouldStop()) return;
-        const queueIndex = nextIndex++;
-        if (queueIndex >= readQueue.length) return;
-
-        const ch = readQueue[queueIndex];
-        try {
-          await BluetoothScanner.readCharacteristic(ch);
+    const readAgents = Array.from({ length: readAgentCount }, (_, agentIndex) =>
+      (async () => {
+        while (true) {
           if (shouldStop()) return;
-          completedReads++;
-          results.readableValues++;
-          emit(AGENT_STATES.READING,
-            `[agent ${agentIndex + 1}] Read ${ch.name}: ${ch.value || '(empty)'}`,
-            {
-              char: ch.name,
-              value: ch.value,
-              readAgent: agentIndex + 1,
-              progress: `${completedReads + failedReads}/${readQueue.length}`
-            });
-        } catch (_) {
-          failedReads++;
-          // Some characteristics refuse reads — that's normal
+          const queueIndex = nextIndex++;
+          if (queueIndex >= readQueue.length) return;
+
+          const ch = readQueue[queueIndex];
+          try {
+            await BluetoothScanner.readCharacteristic(ch);
+            if (shouldStop()) return;
+            completedReads++;
+            results.readableValues++;
+            emit(
+              AGENT_STATES.READING,
+              `[agent ${agentIndex + 1}] Read ${ch.name}: ${ch.value || '(empty)'}`,
+              {
+                char: ch.name,
+                value: ch.value,
+                readAgent: agentIndex + 1,
+                progress: `${completedReads + failedReads}/${readQueue.length}`,
+              },
+            );
+          } catch (_) {
+            failedReads++;
+            // Some characteristics refuse reads — that's normal
+          }
         }
-      }
-    })());
+      })(),
+    );
 
     await Promise.all(readAgents);
     if (shouldStop()) return;
 
-    emit(AGENT_STATES.READING,
+    emit(
+      AGENT_STATES.READING,
       `Read ${results.readableValues}/${readQueue.length} characteristic values using ${readAgentCount} parallel agents`,
       {
         readAgents: readAgentCount,
         attemptedReads: readQueue.length,
         successfulReads: results.readableValues,
-        failedReads
-      });
+        failedReads,
+      },
+    );
   }
 
   /**
@@ -253,14 +263,17 @@ const Advanced = (() => {
       if (agent.stopRequested) break;
       const batch = readableChars.slice(i, i + CHAR_READ_BATCH_SIZE);
       const results = await Promise.allSettled(
-        batch.map(ch => BluetoothScanner.readCharacteristic(ch))
+        batch.map((ch) => BluetoothScanner.readCharacteristic(ch)),
       );
       for (let j = 0; j < results.length; j++) {
         if (results[j].status === 'fulfilled') {
           readCount++;
-          emitAgent(agent, AGENT_STATES.READING,
+          emitAgent(
+            agent,
+            AGENT_STATES.READING,
             `Read ${batch[j].name}: ${batch[j].value || '(empty)'}`,
-            { char: batch[j].name, value: batch[j].value });
+            { char: batch[j].name, value: batch[j].value },
+          );
         }
       }
     }
@@ -277,7 +290,8 @@ const Advanced = (() => {
     agent.running = true;
     agent.stopRequested = false;
     agent.startTime = Date.now();
-    const shouldStop = () => agent.stopRequested || agent.runToken !== localToken || globalStopRequested;
+    const shouldStop = () =>
+      agent.stopRequested || agent.runToken !== localToken || globalStopRequested;
 
     const results = {
       agentId: agent.id,
@@ -290,26 +304,36 @@ const Advanced = (() => {
       writableChars: 0,
       captureId: null,
       vulnReport: null,
-      analysis: null
+      analysis: null,
     };
 
     try {
       emitAgent(agent, AGENT_STATES.CONNECTING, `Connecting to ${deviceInfo.name}...`);
 
       try {
-        await BluetoothScanner.connect(deviceInfo.id, { source: 'agent', deepReadOnEnumerate: false });
+        await BluetoothScanner.connect(deviceInfo.id, {
+          source: 'agent',
+          deepReadOnEnumerate: false,
+        });
         if (shouldStop()) return results;
         emitAgent(agent, AGENT_STATES.CONNECTING, `Connected to ${deviceInfo.name}`);
       } catch (err) {
-        emitAgent(agent, AGENT_STATES.ERROR,
-          `Connection failed: ${err.message} — analyzing what we have`);
+        emitAgent(
+          agent,
+          AGENT_STATES.ERROR,
+          `Connection failed: ${err.message} — analyzing what we have`,
+        );
         if (shouldStop()) return results;
         return finalizeAgent(agent, results);
       }
 
       if (shouldStop()) return results;
 
-      emitAgent(agent, AGENT_STATES.ENUMERATING, 'Enumerating GATT services and characteristics...');
+      emitAgent(
+        agent,
+        AGENT_STATES.ENUMERATING,
+        'Enumerating GATT services and characteristics...',
+      );
 
       const updatedInfo = BluetoothScanner.getDevice(deviceInfo.id);
       if (updatedInfo) {
@@ -322,21 +346,35 @@ const Advanced = (() => {
             }
           }
         }
-        emitAgent(agent, AGENT_STATES.ENUMERATING,
+        emitAgent(
+          agent,
+          AGENT_STATES.ENUMERATING,
           `Found ${results.servicesFound} services, ${results.characteristicsFound} characteristics`,
-          { services: results.servicesFound, chars: results.characteristicsFound });
+          { services: results.servicesFound, chars: results.characteristicsFound },
+        );
       }
 
       if (shouldStop()) return results;
 
-      emitAgent(agent, AGENT_STATES.READING, 'Reading all accessible characteristics (parallel batches)...');
+      emitAgent(
+        agent,
+        AGENT_STATES.READING,
+        'Reading all accessible characteristics (parallel batches)...',
+      );
       results.readableValues = await parallelReadCharacteristics(updatedInfo, agent);
-      emitAgent(agent, AGENT_STATES.READING,
-        `Read ${results.readableValues} characteristic values`);
+      emitAgent(
+        agent,
+        AGENT_STATES.READING,
+        `Read ${results.readableValues} characteristic values`,
+      );
 
       if (shouldStop()) return results;
 
-      emitAgent(agent, AGENT_STATES.CAPTURING, 'Running capture + vulnerability assessment in parallel...');
+      emitAgent(
+        agent,
+        AGENT_STATES.CAPTURING,
+        'Running capture + vulnerability assessment in parallel...',
+      );
       const [captureResult, vulnResult] = await Promise.allSettled([
         (async () => {
           const profile = await Announcements.captureFromDeviceId(deviceInfo.id, { reRead: false });
@@ -345,31 +383,44 @@ const Advanced = (() => {
         (async () => {
           const freshInfo = BluetoothScanner.getDevice(deviceInfo.id);
           return freshInfo ? Vulnerability.assessDevice(freshInfo) : null;
-        })()
+        })(),
       ]);
 
       if (captureResult.status === 'fulfilled' && captureResult.value) {
         results.captureId = captureResult.value.id;
-        emitAgent(agent, AGENT_STATES.CAPTURING,
+        emitAgent(
+          agent,
+          AGENT_STATES.CAPTURING,
           `Profile captured: ${captureResult.value.totalChars} chars, ${captureResult.value.readableChars} readable`,
-          { captureId: captureResult.value.id });
+          { captureId: captureResult.value.id },
+        );
       } else if (captureResult.status === 'rejected') {
-        emitAgent(agent, AGENT_STATES.ERROR, `Capture failed: ${captureResult.reason?.message || 'unknown error'}`);
+        emitAgent(
+          agent,
+          AGENT_STATES.ERROR,
+          `Capture failed: ${captureResult.reason?.message || 'unknown error'}`,
+        );
       }
 
       if (vulnResult.status === 'fulfilled' && vulnResult.value) {
         results.vulnReport = vulnResult.value;
-        emitAgent(agent, AGENT_STATES.VULN_ASSESS,
+        emitAgent(
+          agent,
+          AGENT_STATES.VULN_ASSESS,
           `Assessment: ${vulnResult.value.riskLevel} risk (score ${vulnResult.value.riskScore}/100), ${vulnResult.value.findings.length} findings`,
-          { riskLevel: vulnResult.value.riskLevel, riskScore: vulnResult.value.riskScore });
+          { riskLevel: vulnResult.value.riskLevel, riskScore: vulnResult.value.riskScore },
+        );
       } else if (vulnResult.status === 'rejected') {
-        emitAgent(agent, AGENT_STATES.ERROR, `Vulnerability assessment failed: ${vulnResult.reason?.message || 'unknown error'}`);
+        emitAgent(
+          agent,
+          AGENT_STATES.ERROR,
+          `Vulnerability assessment failed: ${vulnResult.reason?.message || 'unknown error'}`,
+        );
       }
 
       if (shouldStop()) return results;
 
       return finalizeAgent(agent, results);
-
     } catch (err) {
       if (!shouldStop()) {
         emitAgent(agent, AGENT_STATES.ERROR, `Agent error: ${err.message}`);
@@ -387,35 +438,41 @@ const Advanced = (() => {
     const analysis = {
       summary: [],
       riskFactors: [],
-      recommendations: []
+      recommendations: [],
     };
 
     analysis.summary.push(`Device: ${results.deviceName}`);
-    analysis.summary.push(`${results.servicesFound} GATT services with ${results.characteristicsFound} characteristics`);
+    analysis.summary.push(
+      `${results.servicesFound} GATT services with ${results.characteristicsFound} characteristics`,
+    );
     analysis.summary.push(`${results.readableValues} readable values captured`);
     analysis.summary.push(`${results.writableChars} writable characteristics found`);
 
     if (results.writableChars > 0) {
       analysis.riskFactors.push(
-        `${results.writableChars} writable characteristic(s) — values can be modified by any connected client`
+        `${results.writableChars} writable characteristic(s) — values can be modified by any connected client`,
       );
     }
 
     if (results.readableValues > 5) {
       analysis.riskFactors.push(
-        'Device exposes multiple readable values — potential information disclosure'
+        'Device exposes multiple readable values — potential information disclosure',
       );
     }
 
     if (results.servicesFound > 3) {
       analysis.riskFactors.push(
-        'Large service surface area — increased attack surface for GATT-level testing'
+        'Large service surface area — increased attack surface for GATT-level testing',
       );
     }
 
     if (results.vulnReport) {
-      analysis.summary.push(`Vulnerability score: ${results.vulnReport.riskScore}/100 (${results.vulnReport.riskLevel})`);
-      for (const f of results.vulnReport.findings.filter(f => f.severity === 'critical' || f.severity === 'high')) {
+      analysis.summary.push(
+        `Vulnerability score: ${results.vulnReport.riskScore}/100 (${results.vulnReport.riskLevel})`,
+      );
+      for (const f of results.vulnReport.findings.filter(
+        (f) => f.severity === 'critical' || f.severity === 'high',
+      )) {
         analysis.riskFactors.push(`[${f.severity.toUpperCase()}] ${f.title}: ${f.detail}`);
       }
       for (const rec of results.vulnReport.recommendations) {
@@ -423,11 +480,15 @@ const Advanced = (() => {
       }
     } else {
       analysis.recommendations.push('Review writable characteristics for input validation testing');
-      analysis.recommendations.push('Check if sensitive data is exposed via readable characteristics');
+      analysis.recommendations.push(
+        'Check if sensitive data is exposed via readable characteristics',
+      );
     }
     analysis.recommendations.push('Test replay of captured values to verify write protections');
     if (results.captureId) {
-      analysis.recommendations.push('Profile captured — use Replay in the Announce tab for write testing');
+      analysis.recommendations.push(
+        'Profile captured — use Replay in the Announce tab for write testing',
+      );
     }
 
     results.analysis = analysis;
@@ -443,7 +504,7 @@ const Advanced = (() => {
    */
   async function runParallelDiscovery() {
     const allDevices = BluetoothScanner.getDevices();
-    const targets = allDevices.filter(d => !d.connected);
+    const targets = allDevices.filter((d) => !d.connected);
 
     if (targets.length === 0) {
       setStatus(AGENT_STATES.IDLE, 'No discovered devices to analyze — scan for devices first');
@@ -451,18 +512,23 @@ const Advanced = (() => {
     }
 
     globalStopRequested = false;
-    const runToken = ++activeRunToken;
+    ++activeRunToken;
     currentState = AGENT_STATES.SCANNING;
 
-    const agentList = targets.map(dev => createAgent(dev));
-    agentList.forEach(a => emitAgent(a, AGENT_STATES.QUEUED, `Queued for parallel processing`));
+    const agentList = targets.map((dev) => createAgent(dev));
+    agentList.forEach((a) => emitAgent(a, AGENT_STATES.QUEUED, `Queued for parallel processing`));
 
-    setStatus(AGENT_STATES.SCANNING,
+    setStatus(
+      AGENT_STATES.SCANNING,
       `Launching ${agentList.length} parallel agent(s) across ${targets.length} device(s)`,
-      { agentCount: agentList.length });
+      { agentCount: agentList.length },
+    );
 
     if (aggregateCallback) {
-      aggregateCallback({ type: 'start', agents: agentList.map(a => ({ id: a.id, deviceName: a.deviceName })) });
+      aggregateCallback({
+        type: 'start',
+        agents: agentList.map((a) => ({ id: a.id, deviceName: a.deviceName })),
+      });
     }
 
     const allResults = [];
@@ -489,7 +555,11 @@ const Advanced = (() => {
     await Promise.all(workers);
 
     const aggregate = buildAggregateResults(allResults);
-    setStatus(AGENT_STATES.COMPLETE, `Parallel discovery complete — ${allResults.length} device(s) analyzed`, aggregate);
+    setStatus(
+      AGENT_STATES.COMPLETE,
+      `Parallel discovery complete — ${allResults.length} device(s) analyzed`,
+      aggregate,
+    );
     currentState = AGENT_STATES.COMPLETE;
 
     if (aggregateCallback) {
@@ -514,8 +584,8 @@ const Advanced = (() => {
       analysis: {
         summary: [],
         riskFactors: [],
-        recommendations: []
-      }
+        recommendations: [],
+      },
     };
 
     for (const r of allResults) {
@@ -523,18 +593,25 @@ const Advanced = (() => {
       aggregate.totalCharacteristics += r.characteristicsFound || 0;
       aggregate.totalReadable += r.readableValues || 0;
       aggregate.totalWritable += r.writableChars || 0;
-      if (r.vulnReport && (r.vulnReport.riskLevel === 'Critical' || r.vulnReport.riskLevel === 'High')) {
+      if (
+        r.vulnReport &&
+        (r.vulnReport.riskLevel === 'Critical' || r.vulnReport.riskLevel === 'High')
+      ) {
         aggregate.highRiskDevices++;
       }
     }
 
     aggregate.analysis.summary.push(`Analyzed ${aggregate.totalDevices} device(s) in parallel`);
-    aggregate.analysis.summary.push(`${aggregate.totalServices} total services, ${aggregate.totalCharacteristics} total characteristics`);
-    aggregate.analysis.summary.push(`${aggregate.totalReadable} readable values, ${aggregate.totalWritable} writable characteristics`);
+    aggregate.analysis.summary.push(
+      `${aggregate.totalServices} total services, ${aggregate.totalCharacteristics} total characteristics`,
+    );
+    aggregate.analysis.summary.push(
+      `${aggregate.totalReadable} readable values, ${aggregate.totalWritable} writable characteristics`,
+    );
 
     if (aggregate.highRiskDevices > 0) {
       aggregate.analysis.riskFactors.push(
-        `${aggregate.highRiskDevices} device(s) rated High/Critical risk`
+        `${aggregate.highRiskDevices} device(s) rated High/Critical risk`,
       );
     }
 
@@ -546,8 +623,12 @@ const Advanced = (() => {
       }
     }
 
-    aggregate.analysis.recommendations.push('Compare vulnerability profiles across devices for common weaknesses');
-    aggregate.analysis.recommendations.push('Prioritize high-risk devices for deeper manual testing');
+    aggregate.analysis.recommendations.push(
+      'Compare vulnerability profiles across devices for common weaknesses',
+    );
+    aggregate.analysis.recommendations.push(
+      'Prioritize high-risk devices for deeper manual testing',
+    );
 
     for (const r of allResults) {
       if (r.analysis?.recommendations) {
@@ -587,7 +668,7 @@ const Advanced = (() => {
       writableChars: 0,
       captureId: null,
       vulnReport: null,
-      analysis: null
+      analysis: null,
     };
 
     currentState = AGENT_STATES.SCANNING;
@@ -600,9 +681,10 @@ const Advanced = (() => {
         deviceInfo = await BluetoothScanner.scanAll();
         if (shouldStop()) return results;
         results.devicesFound++;
-        emit(AGENT_STATES.SCANNING,
-          `Found device: ${deviceInfo.name} (${deviceInfo.id})`,
-          { name: deviceInfo.name, id: deviceInfo.id });
+        emit(AGENT_STATES.SCANNING, `Found device: ${deviceInfo.name} (${deviceInfo.id})`, {
+          name: deviceInfo.name,
+          id: deviceInfo.id,
+        });
       } catch (err) {
         if (err.name === 'NotFoundError') {
           emit(AGENT_STATES.IDLE, 'Scan cancelled - no device selected');
@@ -617,12 +699,14 @@ const Advanced = (() => {
       emit(AGENT_STATES.CONNECTING, `Connecting to ${deviceInfo.name}...`);
 
       try {
-        await BluetoothScanner.connect(deviceInfo.id, { source: 'agent', deepReadOnEnumerate: false });
+        await BluetoothScanner.connect(deviceInfo.id, {
+          source: 'agent',
+          deepReadOnEnumerate: false,
+        });
         if (shouldStop()) return results;
         emit(AGENT_STATES.CONNECTING, `Connected to ${deviceInfo.name}`);
       } catch (err) {
-        emit(AGENT_STATES.ERROR,
-          `Connection failed: ${err.message} - analyzing what we have`);
+        emit(AGENT_STATES.ERROR, `Connection failed: ${err.message} - analyzing what we have`);
         if (shouldStop()) return results;
         return finalize(results, runToken);
       }
@@ -642,9 +726,11 @@ const Advanced = (() => {
             }
           }
         }
-        emit(AGENT_STATES.ENUMERATING,
+        emit(
+          AGENT_STATES.ENUMERATING,
           `Found ${results.servicesFound} services, ${results.characteristicsFound} characteristics`,
-          { services: results.servicesFound, chars: results.characteristicsFound });
+          { services: results.servicesFound, chars: results.characteristicsFound },
+        );
       }
 
       if (shouldStop()) return results;
@@ -668,7 +754,7 @@ const Advanced = (() => {
       emit(AGENT_STATES.CAPTURING, 'Running capture + vulnerability assessment in parallel...');
 
       const [captureResult, vulnResult] = await Promise.allSettled([
-        Announcements.captureFromDeviceId(deviceInfo.id, { reRead: false }).catch(err => {
+        Announcements.captureFromDeviceId(deviceInfo.id, { reRead: false }).catch((err) => {
           emit(AGENT_STATES.ERROR, `Capture failed: ${err.message}`);
           return null;
         }),
@@ -679,27 +765,34 @@ const Advanced = (() => {
             emit(AGENT_STATES.ERROR, `Vulnerability assessment failed: ${err.message}`);
             return null;
           }
-        })()
+        })(),
       ]);
 
       if (captureResult.status === 'fulfilled' && captureResult.value) {
         results.captureId = captureResult.value.id;
-        emit(AGENT_STATES.CAPTURING,
+        emit(
+          AGENT_STATES.CAPTURING,
           `Profile captured: ${captureResult.value.totalChars} chars, ${captureResult.value.readableChars} readable`,
-          { captureId: captureResult.value.id });
+          { captureId: captureResult.value.id },
+        );
       }
 
       if (vulnResult.status === 'fulfilled' && vulnResult.value) {
         results.vulnReport = vulnResult.value;
-        emit(AGENT_STATES.VULN_ASSESS,
+        emit(
+          AGENT_STATES.VULN_ASSESS,
           `Assessment: ${vulnResult.value.riskLevel} risk (score ${vulnResult.value.riskScore}/100), ${vulnResult.value.findings.length} findings`,
-          { riskLevel: vulnResult.value.riskLevel, riskScore: vulnResult.value.riskScore, findingCount: vulnResult.value.findings.length });
+          {
+            riskLevel: vulnResult.value.riskLevel,
+            riskScore: vulnResult.value.riskScore,
+            findingCount: vulnResult.value.findings.length,
+          },
+        );
       }
 
       if (shouldStop()) return results;
 
       return finalize(results, runToken);
-
     } catch (err) {
       if (!shouldStop()) {
         emit(AGENT_STATES.ERROR, `Agent error: ${err.message}`);
@@ -719,35 +812,41 @@ const Advanced = (() => {
     const analysis = {
       summary: [],
       riskFactors: [],
-      recommendations: []
+      recommendations: [],
     };
 
     analysis.summary.push(`Discovered ${results.devicesFound} device(s)`);
-    analysis.summary.push(`${results.servicesFound} GATT services with ${results.characteristicsFound} characteristics`);
+    analysis.summary.push(
+      `${results.servicesFound} GATT services with ${results.characteristicsFound} characteristics`,
+    );
     analysis.summary.push(`${results.readableValues} readable values captured`);
     analysis.summary.push(`${results.writableChars} writable characteristics found`);
 
     if (results.writableChars > 0) {
       analysis.riskFactors.push(
-        `${results.writableChars} writable characteristic(s) — values can be modified by any connected client`
+        `${results.writableChars} writable characteristic(s) — values can be modified by any connected client`,
       );
     }
 
     if (results.readableValues > 5) {
       analysis.riskFactors.push(
-        'Device exposes multiple readable values — potential information disclosure'
+        'Device exposes multiple readable values — potential information disclosure',
       );
     }
 
     if (results.servicesFound > 3) {
       analysis.riskFactors.push(
-        'Large service surface area — increased attack surface for GATT-level testing'
+        'Large service surface area — increased attack surface for GATT-level testing',
       );
     }
 
     if (results.vulnReport) {
-      analysis.summary.push(`Vulnerability score: ${results.vulnReport.riskScore}/100 (${results.vulnReport.riskLevel})`);
-      for (const f of results.vulnReport.findings.filter(f => f.severity === 'critical' || f.severity === 'high')) {
+      analysis.summary.push(
+        `Vulnerability score: ${results.vulnReport.riskScore}/100 (${results.vulnReport.riskLevel})`,
+      );
+      for (const f of results.vulnReport.findings.filter(
+        (f) => f.severity === 'critical' || f.severity === 'high',
+      )) {
         analysis.riskFactors.push(`[${f.severity.toUpperCase()}] ${f.title}: ${f.detail}`);
       }
       for (const rec of results.vulnReport.recommendations) {
@@ -755,11 +854,15 @@ const Advanced = (() => {
       }
     } else {
       analysis.recommendations.push('Review writable characteristics for input validation testing');
-      analysis.recommendations.push('Check if sensitive data is exposed via readable characteristics');
+      analysis.recommendations.push(
+        'Check if sensitive data is exposed via readable characteristics',
+      );
     }
     analysis.recommendations.push('Test replay of captured values to verify write protections');
     if (results.captureId) {
-      analysis.recommendations.push('Profile captured — use Replay in the Announce tab for write testing');
+      analysis.recommendations.push(
+        'Profile captured — use Replay in the Announce tab for write testing',
+      );
     }
 
     results.analysis = analysis;
@@ -785,11 +888,12 @@ const Advanced = (() => {
     try {
       const info = await BluetoothScanner.scanAll();
       if (shouldStop()) return null;
-      emit(AGENT_STATES.COMPLETE,
-        `Identified: ${info.name} (${info.id})`,
-        { name: info.name, id: info.id });
+      emit(AGENT_STATES.COMPLETE, `Identified: ${info.name} (${info.id})`, {
+        name: info.name,
+        id: info.id,
+      });
       return info;
-    } catch (err) {
+    } catch (_err) {
       if (!shouldStop()) {
         emit(AGENT_STATES.IDLE, 'Quick scan cancelled');
       }
@@ -816,6 +920,10 @@ const Advanced = (() => {
     setOnStatus,
     setOnAggregate,
     AGENT_STATES,
-    MAX_CONCURRENT_AGENTS
+    MAX_CONCURRENT_AGENTS,
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = Advanced;
+}

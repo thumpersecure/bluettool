@@ -7,6 +7,68 @@
  */
 const Announcements = (() => {
   const captures = []; // array of captured profiles
+  const DEFAULT_MAX_IMPORT_BYTES = 1024 * 1024; // 1MB
+  let captureCounter = 0;
+
+  function maxImportBytes() {
+    const configured = Number(
+      typeof window !== 'undefined' ? window.BLUETTOOL_MAX_IMPORT_BYTES : undefined,
+    );
+    return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_IMPORT_BYTES;
+  }
+
+  function log(level, message) {
+    if (typeof Logger === 'undefined') return;
+    if (typeof Logger[level] === 'function') Logger[level](message);
+  }
+
+  function createCaptureId(prefix = 'capture') {
+    captureCounter += 1;
+    return `${prefix}-${Date.now()}-${captureCounter}`;
+  }
+
+  function normalizeImportedProfile(item, importedIndex) {
+    if (!item || typeof item !== 'object') return null;
+    if (!Array.isArray(item.services)) return null;
+
+    const services = item.services
+      .filter((s) => s && typeof s === 'object' && s.uuid)
+      .map((s) => ({
+        uuid: String(s.uuid),
+        name: s.name || s.uuid,
+        characteristics: Array.isArray(s.characteristics)
+          ? s.characteristics
+              .filter((c) => c && typeof c === 'object' && c.uuid)
+              .map((c) => ({
+                uuid: String(c.uuid),
+                name: c.name || c.uuid,
+                properties: Array.isArray(c.properties) ? c.properties.map((p) => String(p)) : [],
+                value: c.value ?? null,
+                textValue: c.textValue ?? null,
+              }))
+          : [],
+      }));
+
+    if (services.length === 0) return null;
+
+    const profile = {
+      id: createCaptureId(`capture-import-${importedIndex}`),
+      deviceName: item.deviceName || item.name || 'Imported',
+      deviceId: item.deviceId || item.id || '',
+      timestamp: item.timestamp || new Date().toISOString(),
+      services,
+      totalChars: 0,
+      readableChars: 0,
+    };
+
+    for (const svc of profile.services) {
+      for (const ch of svc.characteristics) {
+        profile.totalChars++;
+        if (ch.value !== null && ch.value !== undefined && ch.value !== '') profile.readableChars++;
+      }
+    }
+    return profile;
+  }
 
   /**
    * Capture all readable characteristic data from the currently connected device.
@@ -28,8 +90,9 @@ const Announcements = (() => {
    * @param {boolean} [options.reRead=true] - if true, re-read readable characteristics during capture
    */
   async function captureFromDeviceId(deviceId, options = {}) {
-    const deviceInfo = BluetoothScanner.getDevice(deviceId) ||
-      (BluetoothScanner.getDevices?.() || []).find(d => d.id === deviceId);
+    const deviceInfo =
+      BluetoothScanner.getDevice(deviceId) ||
+      (BluetoothScanner.getDevices?.() || []).find((d) => d.id === deviceId);
     if (!deviceInfo || !deviceInfo.connected) {
       Logger.error('Device not connected - connect to a device first');
       throw new Error('No device connected');
@@ -40,30 +103,30 @@ const Announcements = (() => {
     Logger.info(`Capturing BLE profile from ${deviceInfo.name}...`);
 
     const profile = {
-      id: `capture-${Date.now()}`,
+      id: createCaptureId(),
       deviceName: deviceInfo.name,
       deviceId: deviceInfo.id,
       timestamp: new Date().toISOString(),
       services: [],
       totalChars: 0,
-      readableChars: 0
+      readableChars: 0,
     };
 
-    for (const svc of (deviceInfo.services || [])) {
+    for (const svc of deviceInfo.services || []) {
       const svcCapture = {
         uuid: svc.uuid,
         name: svc.name,
-        characteristics: []
+        characteristics: [],
       };
 
-      for (const char of (svc.characteristics || [])) {
+      for (const char of svc.characteristics || []) {
         profile.totalChars++;
         const charCapture = {
           uuid: char.uuid,
           name: char.name,
           properties: [...char.properties],
           value: null,
-          textValue: null
+          textValue: null,
         };
 
         // Re-read current values (optional)
@@ -93,7 +156,7 @@ const Announcements = (() => {
     Logger.success(`Profile captured: ${profile.deviceName}`, {
       services: profile.services.length,
       characteristics: profile.totalChars,
-      readable: profile.readableChars
+      readable: profile.readableChars,
     });
 
     return profile;
@@ -105,7 +168,7 @@ const Announcements = (() => {
    * matched by UUID.
    */
   async function replayToDevice(captureId) {
-    const profile = captures.find(c => c.id === captureId);
+    const profile = captures.find((c) => c.id === captureId);
     if (!profile) {
       Logger.error('Capture profile not found');
       throw new Error('Capture not found');
@@ -118,20 +181,24 @@ const Announcements = (() => {
     }
 
     const normalizeUuid = BluetoothScanner.normalizeUuid;
-    const capturedServices = new Set(profile.services.map(s => normalizeUuid(s.uuid)));
-    const connectedServices = new Set((deviceInfo.services || []).map(s => normalizeUuid(s.uuid)));
+    const capturedServices = new Set(profile.services.map((s) => normalizeUuid(s.uuid)));
+    const connectedServices = new Set(
+      (deviceInfo.services || []).map((s) => normalizeUuid(s.uuid)),
+    );
     let sharedServiceCount = 0;
     for (const svcUuid of capturedServices) {
       if (connectedServices.has(svcUuid)) sharedServiceCount++;
     }
 
-    const overlapRatio = capturedServices.size > 0 ? (sharedServiceCount / capturedServices.size) : 0;
+    const overlapRatio = capturedServices.size > 0 ? sharedServiceCount / capturedServices.size : 0;
     if (deviceInfo.id !== profile.deviceId && overlapRatio < 0.5) {
       Logger.error('Replay blocked: connected device does not match capture profile');
       throw new Error('Connected device does not match this capture profile');
     }
     if (deviceInfo.id !== profile.deviceId) {
-      Logger.warn(`Replay target differs from capture source (${profile.deviceId} -> ${deviceInfo.id})`);
+      Logger.warn(
+        `Replay target differs from capture source (${profile.deviceId} -> ${deviceInfo.id})`,
+      );
     }
 
     Logger.info(`Replaying profile "${profile.deviceName}" to ${deviceInfo.name}...`);
@@ -141,15 +208,18 @@ const Announcements = (() => {
     let failed = 0;
 
     for (const svc of profile.services) {
-      const targetService = deviceInfo.services.find(s => normalizeUuid(s.uuid) === normalizeUuid(svc.uuid));
+      const targetService = deviceInfo.services.find(
+        (s) => normalizeUuid(s.uuid) === normalizeUuid(svc.uuid),
+      );
       for (const capturedChar of svc.characteristics) {
         if (!capturedChar.value) {
           skipped++;
           continue;
         }
 
-        const canWrite = capturedChar.properties.includes('write') ||
-                         capturedChar.properties.includes('writeNoResp');
+        const canWrite =
+          capturedChar.properties.includes('write') ||
+          capturedChar.properties.includes('writeNoResp');
         if (!canWrite) {
           skipped++;
           continue;
@@ -162,7 +232,7 @@ const Announcements = (() => {
 
         // Find matching characteristic on connected device within same service
         const targetChar = targetService.characteristics.find(
-          c => normalizeUuid(c.uuid) === normalizeUuid(capturedChar.uuid)
+          (c) => normalizeUuid(c.uuid) === normalizeUuid(capturedChar.uuid),
         );
 
         if (!targetChar) {
@@ -170,8 +240,8 @@ const Announcements = (() => {
           continue;
         }
 
-        const targetWritable = targetChar.properties.includes('write') ||
-          targetChar.properties.includes('writeNoResp');
+        const targetWritable =
+          targetChar.properties.includes('write') || targetChar.properties.includes('writeNoResp');
         if (!targetWritable) {
           skipped++;
           continue;
@@ -196,22 +266,22 @@ const Announcements = (() => {
    * Export a capture profile as JSON for external analysis
    */
   function exportCapture(captureId) {
-    const profile = captures.find(c => c.id === captureId);
+    const profile = captures.find((c) => c.id === captureId);
     if (!profile) return;
 
     const exportData = {
       ...profile,
-      services: profile.services.map(s => ({
+      services: profile.services.map((s) => ({
         uuid: s.uuid,
         name: s.name,
-        characteristics: s.characteristics.map(c => ({
+        characteristics: s.characteristics.map((c) => ({
           uuid: c.uuid,
           name: c.name,
           properties: c.properties,
           value: c.value,
-          textValue: c.textValue
-        }))
-      }))
+          textValue: c.textValue,
+        })),
+      })),
     };
 
     const json = JSON.stringify(exportData, null, 2);
@@ -232,55 +302,36 @@ const Announcements = (() => {
    * @returns {number} Number of profiles imported
    */
   async function importCapture(file) {
+    if (!file || typeof file.text !== 'function') {
+      throw new Error('Invalid import file');
+    }
+    if (Number(file.size || 0) > maxImportBytes()) {
+      throw new Error(`Import file too large (max ${maxImportBytes()} bytes)`);
+    }
     const text = await file.text();
+    if (text.length > maxImportBytes()) {
+      throw new Error(`Import payload too large (max ${maxImportBytes()} bytes)`);
+    }
     let data;
     try {
       data = JSON.parse(text);
-    } catch (err) {
-      Logger.error('Invalid JSON in import file');
+    } catch (_err) {
+      log('error', 'Invalid JSON in import file');
       throw new Error('Invalid JSON file');
     }
 
     const items = Array.isArray(data) ? data : [data];
     let imported = 0;
 
-    for (const item of items) {
-      if (!item || typeof item !== 'object') continue;
-      if (!item.services || !Array.isArray(item.services)) {
-        Logger.warn('Skipping item: missing services array');
+    for (let i = 0; i < items.length; i++) {
+      const profile = normalizeImportedProfile(items[i], i);
+      if (!profile) {
+        log('warn', 'Skipping item: invalid capture profile format');
         continue;
       }
-
-      const profile = {
-        id: `capture-${Date.now()}-${imported}`,
-        deviceName: item.deviceName || item.name || 'Imported',
-        deviceId: item.deviceId || item.id || '',
-        timestamp: item.timestamp || new Date().toISOString(),
-        services: item.services.map(s => ({
-          uuid: s.uuid,
-          name: s.name || s.uuid,
-          characteristics: (s.characteristics || []).map(c => ({
-            uuid: c.uuid,
-            name: c.name || c.uuid,
-            properties: Array.isArray(c.properties) ? c.properties : [],
-            value: c.value ?? null,
-            textValue: c.textValue ?? null
-          }))
-        })),
-        totalChars: 0,
-        readableChars: 0
-      };
-
-      for (const svc of profile.services) {
-        for (const ch of svc.characteristics) {
-          profile.totalChars++;
-          if (ch.value) profile.readableChars++;
-        }
-      }
-
       captures.push(profile);
       imported++;
-      Logger.success(`Imported profile: ${profile.deviceName}`);
+      log('success', `Imported profile: ${profile.deviceName}`);
     }
 
     return imported;
@@ -302,6 +353,10 @@ const Announcements = (() => {
     exportCapture,
     importCapture,
     getCaptures,
-    clearCaptures
+    clearCaptures,
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = Announcements;
+}

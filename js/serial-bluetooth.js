@@ -33,6 +33,9 @@ const SerialBluetooth = (() => {
   async function open(baudRate = 9600) {
     if (!port) throw new Error('No port selected. Call requestPort() first.');
     await port.open({ baudRate });
+    if (!port.writable || !port.readable) {
+      throw new Error('Selected serial port is not readable/writable');
+    }
     writer = port.writable.getWriter();
     reader = port.readable.getReader();
     connected = true;
@@ -47,10 +50,16 @@ const SerialBluetooth = (() => {
     try {
       if (reader) {
         await reader.cancel();
+        reader.releaseLock();
         reader = null;
       }
       if (writer) {
-        await writer.close();
+        try {
+          await writer.close();
+        } catch (_) {
+          // writer may already be closed
+        }
+        writer.releaseLock();
         writer = null;
       }
       if (port) {
@@ -74,6 +83,10 @@ const SerialBluetooth = (() => {
     requestPort,
     open,
     close,
-    isConnected
+    isConnected,
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = SerialBluetooth;
+}

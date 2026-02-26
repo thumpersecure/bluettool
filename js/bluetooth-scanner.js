@@ -8,11 +8,13 @@ const BluetoothScanner = (() => {
   let connectedServer = null;
   let onDeviceFound = null;
   let onConnectionChange = null;
+  let activeScanPromise = null;
+  const MAX_HEX_BYTES = 512;
   const SMART_LIGHT_SERVICE_UUIDS = [
     '0000ffd5-0000-1000-8000-00805f9b34fb', // Common Govee control service
     '0000ffe0-0000-1000-8000-00805f9b34fb', // Common BLE UART/light service
     '0000ffb0-0000-1000-8000-00805f9b34fb', // Common smart-light custom range
-    '00001300-0000-1000-8000-00805f9b34fb'  // Bluetooth Mesh Lighting service
+    '00001300-0000-1000-8000-00805f9b34fb', // Bluetooth Mesh Lighting service
   ];
 
   const IDENTITY_CHAR_UUIDS = new Set([
@@ -22,9 +24,17 @@ const BluetoothScanner = (() => {
   ]);
 
   const COMMON_SERVICE_UUIDS = [
-    'generic_access', 'generic_attribute', 'device_information', 'battery_service',
-    'heart_rate', 'health_thermometer', 'tx_power', 'immediate_alert', 'link_loss',
-    'current_time', 'human_interface_device',
+    'generic_access',
+    'generic_attribute',
+    'device_information',
+    'battery_service',
+    'heart_rate',
+    'health_thermometer',
+    'tx_power',
+    'immediate_alert',
+    'link_loss',
+    'current_time',
+    'human_interface_device',
     ...SMART_LIGHT_SERVICE_UUIDS,
   ];
 
@@ -35,13 +45,13 @@ const BluetoothScanner = (() => {
     results.push({
       name: 'Web Bluetooth API',
       ok: !!navigator.bluetooth,
-      detail: navigator.bluetooth ? 'Available' : 'Not supported in this browser'
+      detail: navigator.bluetooth ? 'Available' : 'Not supported in this browser',
     });
 
     results.push({
       name: 'HTTPS / Secure Context',
       ok: window.isSecureContext,
-      detail: window.isSecureContext ? 'Secure context' : 'Requires HTTPS or localhost'
+      detail: window.isSecureContext ? 'Secure context' : 'Requires HTTPS or localhost',
     });
 
     const isChrome = /Chrome/.test(navigator.userAgent) && !/Edge/.test(navigator.userAgent);
@@ -73,7 +83,7 @@ const BluetoothScanner = (() => {
     results.push({
       name: 'Bluetooth Availability',
       ok: null, // async check below
-      detail: 'Checking...'
+      detail: 'Checking...',
     });
 
     // Classic Bluetooth via Web Serial (Chrome 117+)
@@ -81,19 +91,26 @@ const BluetoothScanner = (() => {
     results.push({
       name: 'Classic Bluetooth (Web Serial)',
       ok: hasSerial,
-      detail: hasSerial ? 'Available — RFCOMM/SPP on paired devices' : 'Chrome 117+ required for Classic BT'
+      detail: hasSerial
+        ? 'Available — RFCOMM/SPP on paired devices'
+        : 'Chrome 117+ required for Classic BT',
     });
 
     if (navigator.bluetooth && navigator.bluetooth.getAvailability) {
-      navigator.bluetooth.getAvailability().then(available => {
-        results[3].ok = available;
-        results[3].detail = available ? 'Bluetooth adapter available' : 'No Bluetooth adapter found';
-        renderCompatibility(results);
-      }).catch(() => {
-        results[3].ok = null;
-        results[3].detail = 'Could not check (may still work)';
-        renderCompatibility(results);
-      });
+      navigator.bluetooth
+        .getAvailability()
+        .then((available) => {
+          results[3].ok = available;
+          results[3].detail = available
+            ? 'Bluetooth adapter available'
+            : 'No Bluetooth adapter found';
+          renderCompatibility(results);
+        })
+        .catch(() => {
+          results[3].ok = null;
+          results[3].detail = 'Could not check (may still work)';
+          renderCompatibility(results);
+        });
     } else {
       results[3].detail = 'getAvailability() not supported';
     }
@@ -109,14 +126,16 @@ const BluetoothScanner = (() => {
     if (!_compatStatusEl) _compatStatusEl = document.getElementById('compat-status');
     const container = _compatStatusEl;
     if (!container) return;
-    container.innerHTML = results.map(r => {
-      const cls = r.ok === true ? 'compat-ok' : r.ok === false ? 'compat-fail' : 'compat-warn';
-      const icon = r.ok === true ? '\u2713' : r.ok === false ? '\u2717' : '?';
-      return `<div class="compat-item">
+    container.innerHTML = results
+      .map((r) => {
+        const cls = r.ok === true ? 'compat-ok' : r.ok === false ? 'compat-fail' : 'compat-warn';
+        const icon = r.ok === true ? '\u2713' : r.ok === false ? '\u2717' : '?';
+        return `<div class="compat-item">
         <span>${r.name}</span>
         <span class="${cls}">${icon} ${r.detail}</span>
       </div>`;
-    }).join('');
+      })
+      .join('');
   }
 
   function renderCompatMatrix() {
@@ -148,61 +167,72 @@ const BluetoothScanner = (() => {
    * @param {Object} options - Scan filter options
    */
   async function scan(options = {}) {
-    if (!navigator.bluetooth) {
-      Logger.error('Web Bluetooth API not available');
-      throw new Error('Web Bluetooth not supported. On iPhone, use the Bluefy app.');
+    if (activeScanPromise) {
+      Logger.warn('Scan request ignored: a scan is already in progress');
+      return activeScanPromise;
     }
-
-    Logger.info('Starting BLE scan...');
-    updateStatus('scanning', 'Scanning...');
-
-    const requestParams = buildScanFilters(options);
-
-    try {
-      const device = await navigator.bluetooth.requestDevice(requestParams);
-      Logger.success(`Device found: ${device.name || 'Unnamed'}`, `ID: ${device.id}`);
-
-      const info = {
-        id: device.id,
-        name: (device.name || '').trim() || 'Unknown Device',
-        device: device,
-        server: null,
-        discovered: new Date().toISOString(),
-        connected: false,
-        services: [],
-        characteristics: [],
-        rssi: null,
-        manufacturer: null,
-        model: null,
-        deviceType: 'unknown',
-        lightTestPlan: null
-      };
-
-      devices.set(device.id, info);
-      updateStatus('offline', 'Device found');
-      updateDeviceCount();
-
-      device.addEventListener('gattserverdisconnected', () => {
-        Logger.warn(`Device disconnected: ${info.name}`);
-        info.connected = false;
-        info.server = null;
-        if (connectedDevice && connectedDevice.id === info.id) connectedDevice = null;
-        if (connectedServer && connectedServer.device && connectedServer.device.id === info.id) connectedServer = null;
-        updateStatus('offline', 'Disconnected');
-        if (onConnectionChange) onConnectionChange(info, false, { source: 'device' });
-      });
-
-      if (onDeviceFound) onDeviceFound(info);
-      return info;
-
-    } catch (err) {
-      if (err.name === 'NotFoundError') {
-        Logger.warn('Scan cancelled by user');
-      } else {
-        Logger.error(`Scan failed: ${err.message}`);
+    activeScanPromise = (async () => {
+      if (!navigator.bluetooth) {
+        Logger.error('Web Bluetooth API not available');
+        throw new Error('Web Bluetooth not supported. On iPhone, use the Bluefy app.');
       }
-      updateStatus('offline', 'Bluetooth Ready');
-      throw err;
+
+      Logger.info('Starting BLE scan...');
+      updateStatus('scanning', 'Scanning...');
+
+      const requestParams = buildScanFilters(options);
+
+      try {
+        const device = await navigator.bluetooth.requestDevice(requestParams);
+        Logger.success(`Device found: ${device.name || 'Unnamed'}`, `ID: ${device.id}`);
+
+        const info = {
+          id: device.id,
+          name: (device.name || '').trim() || 'Unknown Device',
+          device: device,
+          server: null,
+          discovered: new Date().toISOString(),
+          connected: false,
+          services: [],
+          characteristics: [],
+          rssi: null,
+          manufacturer: null,
+          model: null,
+          deviceType: 'unknown',
+          lightTestPlan: null,
+        };
+
+        devices.set(device.id, info);
+        updateStatus('offline', 'Device found');
+        updateDeviceCount();
+
+        device.addEventListener('gattserverdisconnected', () => {
+          Logger.warn(`Device disconnected: ${info.name}`);
+          info.connected = false;
+          info.server = null;
+          if (connectedDevice && connectedDevice.id === info.id) connectedDevice = null;
+          if (connectedServer && connectedServer.device && connectedServer.device.id === info.id)
+            connectedServer = null;
+          updateStatus('offline', 'Disconnected');
+          if (onConnectionChange) onConnectionChange(info, false, { source: 'device' });
+        });
+
+        if (onDeviceFound) onDeviceFound(info);
+        return info;
+      } catch (err) {
+        if (err.name === 'NotFoundError') {
+          Logger.warn('Scan cancelled by user');
+        } else {
+          Logger.error(`Scan failed: ${err.message}`);
+        }
+        updateStatus('offline', 'Bluetooth Ready');
+        throw err;
+      }
+    })();
+    try {
+      return await activeScanPromise;
+    } finally {
+      activeScanPromise = null;
     }
   }
 
@@ -226,7 +256,7 @@ const BluetoothScanner = (() => {
     if (options.acceptAll) {
       return base({
         acceptAllDevices: true,
-        optionalServices: getCommonServiceUUIDs()
+        optionalServices: getCommonServiceUUIDs(),
       });
     }
 
@@ -243,13 +273,13 @@ const BluetoothScanner = (() => {
     if (filters.length === 0) {
       return base({
         acceptAllDevices: true,
-        optionalServices: getCommonServiceUUIDs()
+        optionalServices: getCommonServiceUUIDs(),
       });
     }
 
     return base({
       filters,
-      optionalServices: getCommonServiceUUIDs()
+      optionalServices: getCommonServiceUUIDs(),
     });
   }
 
@@ -292,7 +322,6 @@ const BluetoothScanner = (() => {
       await enumerateServices(info, server, { readValues: deepReadOnEnumerate });
 
       return info;
-
     } catch (err) {
       Logger.error(`Connection failed: ${err.message}`);
       updateStatus('offline', 'Connection failed');
@@ -344,7 +373,7 @@ const BluetoothScanner = (() => {
         const svcInfo = {
           uuid: service.uuid,
           name: resolveServiceName(service.uuid),
-          characteristics: []
+          characteristics: [],
         };
 
         try {
@@ -363,12 +392,15 @@ const BluetoothScanner = (() => {
               name: resolveCharacteristicName(char.uuid),
               properties: props,
               value: null,
-              characteristic: char
+              characteristic: char,
             };
 
             // Try to read the value
             const normalizedUuid = normalizeUuid(char.uuid);
-            const shouldReadValue = !!(char.properties.read && (readValues || IDENTITY_CHAR_UUIDS.has(normalizedUuid)));
+            const shouldReadValue = !!(
+              char.properties.read &&
+              (readValues || IDENTITY_CHAR_UUIDS.has(normalizedUuid))
+            );
             if (shouldReadValue) {
               try {
                 const value = await char.readValue();
@@ -399,9 +431,8 @@ const BluetoothScanner = (() => {
         services: info.services.length,
         characteristics: info.characteristics.length,
         deviceType: info.deviceType,
-        suggestedTest: info.lightTestPlan?.bestAction || 'none'
+        suggestedTest: info.lightTestPlan?.bestAction || 'none',
       });
-
     } catch (err) {
       Logger.error(`Service enumeration failed: ${err.message}`);
     }
@@ -503,6 +534,9 @@ const BluetoothScanner = (() => {
     if (!clean || clean.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(clean)) {
       throw new Error('Invalid hex payload');
     }
+    if (clean.length / 2 > MAX_HEX_BYTES) {
+      throw new Error(`Hex payload too large (max ${MAX_HEX_BYTES} bytes)`);
+    }
     const bytes = [];
     for (let i = 0; i < clean.length; i += 2) {
       bytes.push(parseInt(clean.substring(i, i + 2), 16));
@@ -511,12 +545,16 @@ const BluetoothScanner = (() => {
   }
 
   function normalizeUuid(uuid) {
-    const raw = String(uuid || '').toLowerCase().trim();
+    const raw = String(uuid || '')
+      .toLowerCase()
+      .trim();
     if (!raw) return '';
     if (typeof BluetoothUUID !== 'undefined' && typeof BluetoothUUID.canonicalUUID === 'function') {
       try {
         return BluetoothUUID.canonicalUUID(raw);
-      } catch (_) { /* fall through */ }
+      } catch (_) {
+        /* fall through */
+      }
     }
     if (/^[0-9a-f]{4}$/.test(raw)) {
       return `0000${raw}-0000-1000-8000-00805f9b34fb`;
@@ -539,7 +577,9 @@ const BluetoothScanner = (() => {
   }
 
   function isPlaceholderName(name) {
-    const normalized = String(name || '').trim().toLowerCase();
+    const normalized = String(name || '')
+      .trim()
+      .toLowerCase();
     return normalized.length === 0 || normalized === 'unknown device' || normalized === 'unnamed';
   }
 
@@ -573,14 +613,22 @@ const BluetoothScanner = (() => {
   function detectDeviceType(info) {
     const name = String(info?.name || '').toLowerCase();
     const manufacturer = String(info?.manufacturer || '').toLowerCase();
-    const serviceUuids = (info?.services || []).map(s => normalizeUuid(s.uuid));
+    const serviceUuids = (info?.services || []).map((s) => normalizeUuid(s.uuid));
 
-    if (serviceUuids.some(uuid => uuid.includes('ffd5')) || name.includes('govee') || manufacturer.includes('govee')) {
+    if (
+      serviceUuids.some((uuid) => uuid.includes('ffd5')) ||
+      name.includes('govee') ||
+      manufacturer.includes('govee')
+    ) {
       return 'govee_light';
     }
 
     if (
-      serviceUuids.some(uuid => SMART_LIGHT_SERVICE_UUIDS.includes(uuid) || /0000ff[0-9a-f]{2}-0000-1000-8000-00805f9b34fb/.test(uuid)) ||
+      serviceUuids.some(
+        (uuid) =>
+          SMART_LIGHT_SERVICE_UUIDS.includes(uuid) ||
+          /0000ff[0-9a-f]{2}-0000-1000-8000-00805f9b34fb/.test(uuid),
+      ) ||
       /(led|light|bulb|lamp|rgb)/.test(name) ||
       /(led|light|bulb|lamp|rgb)/.test(manufacturer)
     ) {
@@ -598,11 +646,11 @@ const BluetoothScanner = (() => {
       '00002a06-0000-1000-8000-00805f9b34fb', // Alert Level
       '00002b00-0000-1000-8000-00805f9b34fb', // Light Lightness Actual
       '0000ffd9-0000-1000-8000-00805f9b34fb', // Common Govee command characteristic
-      '0000ffe1-0000-1000-8000-00805f9b34fb'
+      '0000ffe1-0000-1000-8000-00805f9b34fb',
     ];
 
     for (const uuid of preferredUuids) {
-      const exact = writableChars.find(ch => normalizeUuid(ch.uuid) === uuid);
+      const exact = writableChars.find((ch) => normalizeUuid(ch.uuid) === uuid);
       if (exact) return exact;
     }
 
@@ -612,7 +660,9 @@ const BluetoothScanner = (() => {
       if (svcWritable) return svcWritable;
     }
 
-    const byName = writableChars.find(ch => /(light|led|rgb|color|power|control)/i.test(String(ch.name || '')));
+    const byName = writableChars.find((ch) =>
+      /(light|led|rgb|color|power|control)/i.test(String(ch.name || '')),
+    );
     if (byName) return byName;
 
     return writableChars[0];
@@ -620,8 +670,10 @@ const BluetoothScanner = (() => {
 
   function isLikelyLightService(uuid) {
     const normalized = normalizeUuid(uuid);
-    return SMART_LIGHT_SERVICE_UUIDS.includes(normalized) ||
-      /0000ff[0-9a-f]{2}-0000-1000-8000-00805f9b34fb/.test(normalized);
+    return (
+      SMART_LIGHT_SERVICE_UUIDS.includes(normalized) ||
+      /0000ff[0-9a-f]{2}-0000-1000-8000-00805f9b34fb/.test(normalized)
+    );
   }
 
   function inferPayloadLength(charInfo) {
@@ -639,7 +691,7 @@ const BluetoothScanner = (() => {
     for (let i = 0; i < payloadLength; i++) {
       bytes.push(seedBytes[i % seedBytes.length] & 0xff);
     }
-    return bytes.map(b => b.toString(16).padStart(2, '0')).join(':');
+    return bytes.map((b) => b.toString(16).padStart(2, '0')).join(':');
   }
 
   function buildLightTestPlan(info) {
@@ -648,7 +700,8 @@ const BluetoothScanner = (() => {
 
     const targetUuid = normalizeUuid(targetChar.uuid);
     const targetServiceUuid = normalizeUuid(targetChar?.characteristic?.service?.uuid);
-    const likelyLightDevice = info?.deviceType === 'govee_light' || info?.deviceType === 'smart_light';
+    const likelyLightDevice =
+      info?.deviceType === 'govee_light' || info?.deviceType === 'smart_light';
     const lightContext =
       likelyLightDevice ||
       isLikelyLightService(targetServiceUuid) ||
@@ -661,20 +714,21 @@ const BluetoothScanner = (() => {
         targetCharName: targetChar.name,
         bestAction: 'flash',
         bestActionLabel: 'Flash',
-        reason: 'Immediate Alert characteristic detected — standardized alert test values available.',
+        reason:
+          'Immediate Alert characteristic detected — standardized alert test values available.',
         confidence: 'high',
         actions: {
           flash: {
             label: 'Flash',
             steps: ['02', '00', '02', '00'],
-            delayMs: 180
+            delayMs: 180,
           },
           off: {
             label: 'Off',
             steps: ['00'],
-            delayMs: 0
-          }
-        }
+            delayMs: 0,
+          },
+        },
       };
     }
 
@@ -688,19 +742,19 @@ const BluetoothScanner = (() => {
       flash: {
         label: 'Flash',
         steps: [fullHex, offHex, fullHex, offHex],
-        delayMs: 180
+        delayMs: 180,
       },
       off: {
         label: 'Off',
         steps: [offHex],
-        delayMs: 0
-      }
+        delayMs: 0,
+      },
     };
     if (supportsColor) {
       actions.color = {
         label: 'Color',
         steps: [redHex],
-        delayMs: 0
+        delayMs: 0,
       };
     }
 
@@ -714,23 +768,23 @@ const BluetoothScanner = (() => {
         ? `Using writable characteristic ${targetChar.name} (${targetChar.uuid}).`
         : `No known light profile matched. Using writable characteristic ${targetChar.name} (${targetChar.uuid}) as a generic best-effort test target.`,
       confidence: lightContext ? 'medium' : 'low',
-      actions
+      actions,
     };
   }
 
   function resolveServiceName(uuid) {
     const names = {
-      'generic_access': 'Generic Access',
-      'generic_attribute': 'Generic Attribute',
-      'device_information': 'Device Information',
-      'battery_service': 'Battery Service',
-      'heart_rate': 'Heart Rate',
-      'health_thermometer': 'Health Thermometer',
-      'tx_power': 'Tx Power',
-      'immediate_alert': 'Immediate Alert',
-      'link_loss': 'Link Loss',
-      'current_time': 'Current Time',
-      'human_interface_device': 'HID',
+      generic_access: 'Generic Access',
+      generic_attribute: 'Generic Attribute',
+      device_information: 'Device Information',
+      battery_service: 'Battery Service',
+      heart_rate: 'Heart Rate',
+      health_thermometer: 'Health Thermometer',
+      tx_power: 'Tx Power',
+      immediate_alert: 'Immediate Alert',
+      link_loss: 'Link Loss',
+      current_time: 'Current Time',
+      human_interface_device: 'HID',
       '00001800-0000-1000-8000-00805f9b34fb': 'Generic Access',
       '00001801-0000-1000-8000-00805f9b34fb': 'Generic Attribute',
       '0000180a-0000-1000-8000-00805f9b34fb': 'Device Information',
@@ -809,7 +863,7 @@ const BluetoothScanner = (() => {
 
   function clearDevices() {
     // Disconnect any connected device first
-    for (const [id, info] of devices) {
+    for (const [, info] of devices) {
       if (info.connected && info.device.gatt?.connected) {
         info.device.gatt.disconnect();
       }
@@ -824,19 +878,27 @@ const BluetoothScanner = (() => {
   }
 
   function exportCSV() {
+    function sanitizeCsvCell(value) {
+      const normalized = String(value ?? '');
+      const spreadsheetRisk = /^[=+\-@]/.test(normalized);
+      const escapedFormula = spreadsheetRisk ? `'${normalized}` : normalized;
+      return escapedFormula.replace(/"/g, '""');
+    }
     const rows = [['Name', 'Device ID', 'Connected', 'Discovered', 'Services', 'Characteristics']];
     for (const info of devices.values()) {
       rows.push([
-        info.name,
-        info.id,
+        sanitizeCsvCell(info.name),
+        sanitizeCsvCell(info.id),
         info.connected ? 'Yes' : 'No',
-        info.discovered,
-        (info.services || []).map(s => s.name).join('; '),
-        (info.characteristics || []).map(c => `${c.name}=${c.value || 'N/A'}`).join('; ')
+        sanitizeCsvCell(info.discovered),
+        sanitizeCsvCell((info.services || []).map((s) => s.name).join('; ')),
+        sanitizeCsvCell(
+          (info.characteristics || []).map((c) => `${c.name}=${c.value || 'N/A'}`).join('; '),
+        ),
       ]);
     }
 
-    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -847,8 +909,12 @@ const BluetoothScanner = (() => {
     Logger.success('Device list exported to CSV');
   }
 
-  function setOnDeviceFound(cb) { onDeviceFound = cb; }
-  function setOnConnectionChange(cb) { onConnectionChange = cb; }
+  function setOnDeviceFound(cb) {
+    onDeviceFound = cb;
+  }
+  function setOnConnectionChange(cb) {
+    onConnectionChange = cb;
+  }
 
   return {
     checkSupport,
@@ -870,6 +936,10 @@ const BluetoothScanner = (() => {
     setOnConnectionChange,
     dataViewToHex,
     hexToBytes,
-    normalizeUuid
+    normalizeUuid,
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = BluetoothScanner;
+}

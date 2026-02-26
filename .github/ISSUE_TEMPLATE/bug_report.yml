@@ -1,0 +1,39 @@
+name: Bug report
+description: Report incorrect behavior or regression
+title: '[Bug]: '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please provide enough detail to reproduce it.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Include exact steps and expected vs actual behavior.
+      placeholder: |
+        1. Open app in Bluefy...
+        2. Tap Scan...
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser / Platform
+      placeholder: Bluefy iOS 17 / Chrome 121 / etc.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Paste relevant app logs or attach screenshots.

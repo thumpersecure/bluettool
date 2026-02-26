@@ -32,6 +32,7 @@ const requiredFiles = [
   'index.html',
   'manifest.json',
   'css/style.css',
+  'js/config.js',
   'js/app.js',
   'js/delight.js',
   'js/logger.js',
@@ -153,6 +154,7 @@ assert(html.includes('personal testing'), 'Disclaimer mentions personal testing'
 
 // Script load order (browser-compat must load before bluetooth-scanner for compat matrix)
 const scriptOrder = [
+  'js/config.js',
   'js/logger.js',
   'js/delight.js',
   'js/browser-compat.js',
@@ -166,7 +168,7 @@ const scriptOrder = [
   'js/advanced.js',
   'js/sharing.js',
   'js/voice-commands.js',
-  'js/app.js'
+  'js/app.js',
 ];
 let lastIdx = -1;
 let orderCorrect = true;
@@ -294,9 +296,12 @@ assert(appJs.includes('vuln-recommendations'), 'Renders vulnerability recommenda
 assert(appJs.includes('serviceWorker'), 'Registers service worker');
 
 // Agent stop reset bugfix
-assert(appJs.includes('agentFeed.innerHTML = \'\''), 'Stop button clears agent feed');
-assert(appJs.includes('agentResultsCard.style.display = \'none\''), 'Stop button hides agent results');
-assert(appJs.includes('agentBadge.textContent = \'idle\''), 'Stop button resets agent badge');
+assert(appJs.includes("agentFeed.innerHTML = ''"), 'Stop button clears agent feed');
+assert(
+  appJs.includes("agentResultsCard.style.display = 'none'"),
+  'Stop button hides agent results',
+);
+assert(appJs.includes("agentBadge.textContent = 'idle'"), 'Stop button resets agent badge');
 
 // Parallel agent UI wiring
 assert(appJs.includes('btn-agent-parallel'), 'Wires parallel discovery button');
@@ -315,14 +320,23 @@ assert(appJs.includes('clearAgents'), 'Clears agents before parallel run');
 // --- Tools Tab: Flash All, Off All, DTMF Speed, Color ---
 section('Tools Tab Features');
 
-assert(appJs.includes('runLightActionOnAllDevices'), 'Has runLightActionOnAllDevices for bulk light actions');
-assert(appJs.includes('runLightTestActionWithColor'), 'Has runLightTestActionWithColor for color control');
+assert(
+  appJs.includes('runLightActionOnAllDevices'),
+  'Has runLightActionOnAllDevices for bulk light actions',
+);
+assert(
+  appJs.includes('runLightTestActionWithColor'),
+  'Has runLightTestActionWithColor for color control',
+);
 assert(appJs.includes('btn-flash-all-lights'), 'Wires flash all lights button');
 assert(appJs.includes('btn-off-all-lights'), 'Wires turn off all lights button');
 assert(appJs.includes('btn-set-color-all-lights'), 'Wires set color on all lights button');
 assert(appJs.includes('dtmf-speed'), 'Wires DTMF speed selector to play');
 assert(appJs.includes('btn-play-custom-dtmf'), 'Wires custom DTMF play button');
-assert(appJs.includes('playCustomDTMFSequence'), 'Calls playCustomDTMFSequence for custom sequence');
+assert(
+  appJs.includes('playCustomDTMFSequence'),
+  'Calls playCustomDTMFSequence for custom sequence',
+);
 assert(appJs.includes('light-color-picker'), 'Wires light color picker');
 assert(appJs.includes('light-color-hex'), 'Wires light color hex input');
 assert(appJs.includes('Enter valid hex color'), 'Validates color input format');
@@ -346,7 +360,10 @@ assert(appJs.includes('replay-section'), 'Shows/hides replay section based on ca
 assert(appJs.includes('replay-empty-state'), 'Shows empty state when no captures');
 assert(appJs.includes('mimic-select'), 'Wires mimic select dropdown');
 assert(appJs.includes('btn-mimic'), 'Wires replay button');
-assert(appJs.includes('Announcements.replayToDevice'), 'Calls Announcements.replayToDevice on replay');
+assert(
+  appJs.includes('Announcements.replayToDevice'),
+  'Calls Announcements.replayToDevice on replay',
+);
 assert(appJs.includes('Replaying...'), 'Shows replaying status during replay');
 assert(appJs.includes('Replay complete'), 'Shows success toast on replay complete');
 assert(appJs.includes('Replay failed'), 'Shows error toast on replay failure');
@@ -487,10 +504,16 @@ assert(btJs.includes('lightTestPlan'), 'Stores suggested light test plan');
 section('Announcements Replay Safety');
 
 const annJs = fs.readFileSync(path.join(ROOT, 'js/announcements.js'), 'utf8');
-assert(annJs.includes('Connected device does not match this capture profile'), 'Blocks replay to unrelated devices');
+assert(
+  annJs.includes('Connected device does not match this capture profile'),
+  'Blocks replay to unrelated devices',
+);
 assert(annJs.includes('targetService'), 'Matches replay writes by service + characteristic');
 assert(annJs.includes('deviceInfo.id !== profile.deviceId'), 'Checks replay target device ID');
-assert(annJs.includes('overlapRatio < 0.5'), 'Requires meaningful service overlap for cross-device replay');
+assert(
+  annJs.includes('overlapRatio < 0.5'),
+  'Requires meaningful service overlap for cross-device replay',
+);
 assert(annJs.includes('normalizeUuid'), 'Normalizes UUIDs before matching during replay');
 assert(annJs.includes('getCaptures'), 'Exposes getCaptures for capture list');
 assert(annJs.includes('clearCaptures'), 'Exposes clearCaptures');
@@ -566,7 +589,10 @@ section('Audio File');
 
 const audioPath = path.join(ROOT, 'audio/dtmf-fax-tones.wav');
 const audioStat = fs.statSync(audioPath);
-assert(audioStat.size > 100000, `Audio file is substantial (${(audioStat.size / 1024).toFixed(0)} KB)`);
+assert(
+  audioStat.size > 100000,
+  `Audio file is substantial (${(audioStat.size / 1024).toFixed(0)} KB)`,
+);
 assert(audioStat.size < 5000000, 'Audio file < 5MB');
 
 const wavBuf = Buffer.alloc(44);
