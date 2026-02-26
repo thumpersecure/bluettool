@@ -163,21 +163,18 @@ const Announcements = (() => {
   }
 
   /**
-   * Replay captured characteristic values to a connected device.
-   * Writes previously captured values to writable characteristics
-   * matched by UUID.
+   * Replay captured characteristic values to a specific device.
+   * @param {string} captureId - Capture profile id
+   * @param {Object} deviceInfo - Device info from BluetoothScanner (must have services, connected)
+   * @returns {{ written: number, skipped: number, failed: number, deviceName: string }}
    */
-  async function replayToDevice(captureId) {
+  async function replayToDeviceInfo(captureId, deviceInfo) {
     const profile = captures.find((c) => c.id === captureId);
     if (!profile) {
-      Logger.error('Capture profile not found');
       throw new Error('Capture not found');
     }
-
-    const deviceInfo = BluetoothScanner.getConnectedDevice();
     if (!deviceInfo || !deviceInfo.connected) {
-      Logger.error('No device connected for replay');
-      throw new Error('No device connected');
+      throw new Error('Device not connected');
     }
 
     const normalizeUuid = BluetoothScanner.normalizeUuid;
@@ -192,16 +189,8 @@ const Announcements = (() => {
 
     const overlapRatio = capturedServices.size > 0 ? sharedServiceCount / capturedServices.size : 0;
     if (deviceInfo.id !== profile.deviceId && overlapRatio < 0.5) {
-      Logger.error('Replay blocked: connected device does not match capture profile');
       throw new Error('Connected device does not match this capture profile');
     }
-    if (deviceInfo.id !== profile.deviceId) {
-      Logger.warn(
-        `Replay target differs from capture source (${profile.deviceId} -> ${deviceInfo.id})`,
-      );
-    }
-
-    Logger.info(`Replaying profile "${profile.deviceName}" to ${deviceInfo.name}...`);
 
     let written = 0;
     let skipped = 0;
@@ -230,7 +219,6 @@ const Announcements = (() => {
           continue;
         }
 
-        // Find matching characteristic on connected device within same service
         const targetChar = targetService.characteristics.find(
           (c) => normalizeUuid(c.uuid) === normalizeUuid(capturedChar.uuid),
         );
@@ -257,9 +245,95 @@ const Announcements = (() => {
       }
     }
 
-    const summary = `Replay complete: ${written} written, ${skipped} skipped, ${failed} failed`;
+    return { written, skipped, failed, deviceName: deviceInfo.name };
+  }
+
+  /**
+   * Replay captured characteristic values to the currently connected device.
+   * Writes previously captured values to writable characteristics matched by UUID.
+   */
+  async function replayToDevice(captureId) {
+    const deviceInfo = BluetoothScanner.getConnectedDevice();
+    if (!deviceInfo || !deviceInfo.connected) {
+      Logger.error('No device connected for replay');
+      throw new Error('No device connected');
+    }
+
+    Logger.info(`Replaying profile to ${deviceInfo.name}...`);
+    const result = await replayToDeviceInfo(captureId, deviceInfo);
+    const summary = `Replay complete: ${result.written} written, ${result.skipped} skipped, ${result.failed} failed`;
     Logger.success(summary);
-    return { written, skipped, failed };
+    return result;
+  }
+
+  /**
+   * Replay captured profile to a specific device by ID.
+   * @param {string} captureId - Capture profile id
+   * @param {string} deviceId - BluetoothScanner device id
+   */
+  async function replayToDeviceId(captureId, deviceId) {
+    const deviceInfo =
+      BluetoothScanner.getDevice(deviceId) ||
+      (BluetoothScanner.getDevices?.() || []).find((d) => d.id === deviceId);
+    if (!deviceInfo || !deviceInfo.connected) {
+      throw new Error('Device not connected');
+    }
+    return replayToDeviceInfo(captureId, deviceInfo);
+  }
+
+  /**
+   * Replay captured profile to all connected devices in parallel.
+   * Skips devices that don't match the capture (overlap < 50%).
+   * @param {string} captureId - Capture profile id
+   * @returns {{ totalWritten: number, totalSkipped: number, totalFailed: number, results: Array }}
+   */
+  async function replayToAllConnectedDevices(captureId) {
+    const profile = captures.find((c) => c.id === captureId);
+    if (!profile) {
+      throw new Error('Capture not found');
+    }
+
+    const devices = (BluetoothScanner.getDevices?.() || []).filter((d) => d.connected);
+    if (devices.length === 0) {
+      throw new Error('No devices connected');
+    }
+
+    Logger.info(`Replaying profile "${profile.deviceName}" to ${devices.length} device(s) in parallel...`);
+
+    const settled = await Promise.allSettled(
+      devices.map((dev) => replayToDeviceInfo(captureId, dev)),
+    );
+
+    const results = [];
+    let totalWritten = 0;
+    let totalSkipped = 0;
+    let totalFailed = 0;
+
+    for (let i = 0; i < settled.length; i++) {
+      const s = settled[i];
+      const dev = devices[i];
+      if (s.status === 'fulfilled') {
+        results.push({ deviceName: dev.name, ...s.value });
+        totalWritten += s.value.written;
+        totalSkipped += s.value.skipped;
+        totalFailed += s.value.failed;
+      } else {
+        results.push({ deviceName: dev.name, error: s.reason?.message || 'Unknown error' });
+      }
+    }
+
+    const successCount = settled.filter((s) => s.status === 'fulfilled').length;
+    Logger.success(
+      `Parallel replay: ${successCount}/${devices.length} devices, ${totalWritten} written, ${totalFailed} failed`,
+    );
+    return {
+      totalWritten,
+      totalSkipped,
+      totalFailed,
+      successCount,
+      totalDevices: devices.length,
+      results,
+    };
   }
 
   /**
@@ -350,6 +424,8 @@ const Announcements = (() => {
     captureFromDevice,
     captureFromDeviceId,
     replayToDevice,
+    replayToDeviceId,
+    replayToAllConnectedDevices,
     exportCapture,
     importCapture,
     getCaptures,

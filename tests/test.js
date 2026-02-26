@@ -112,6 +112,7 @@ assert(html.includes('id="captured-list"'), 'Has captured list in replay tab');
 assert(html.includes('id="replay-section"'), 'Has replay section');
 assert(html.includes('id="mimic-select"'), 'Has replay/mimic select');
 assert(html.includes('id="btn-mimic"'), 'Has replay button');
+assert(html.includes('id="btn-mimic-all"'), 'Has replay to all button');
 assert(html.includes('id="btn-import-captures"'), 'Has import captures button');
 assert(html.includes('id="capture-import-input"'), 'Has capture import file input');
 assert(html.includes('id="quick-reconnect-card"'), 'Has quick reconnect card');
@@ -364,6 +365,10 @@ assert(
   appJs.includes('Announcements.replayToDevice'),
   'Calls Announcements.replayToDevice on replay',
 );
+assert(
+  appJs.includes('Announcements.replayToAllConnectedDevices'),
+  'Calls Announcements.replayToAllConnectedDevices for replay to all',
+);
 assert(appJs.includes('Replaying...'), 'Shows replaying status during replay');
 assert(appJs.includes('Replay complete'), 'Shows success toast on replay complete');
 assert(appJs.includes('Replay failed'), 'Shows error toast on replay failure');
@@ -519,6 +524,7 @@ assert(annJs.includes('getCaptures'), 'Exposes getCaptures for capture list');
 assert(annJs.includes('clearCaptures'), 'Exposes clearCaptures');
 assert(annJs.includes('exportCapture'), 'Exposes exportCapture for JSON export');
 assert(annJs.includes('importCapture'), 'Exposes importCapture for JSON import');
+assert(annJs.includes('replayToAllConnectedDevices'), 'Exposes replayToAllConnectedDevices for parallel replay');
 assert(annJs.includes('written, skipped, failed'), 'Replay returns written/skipped/failed counts');
 assert(annJs.includes('captureFromDevice'), 'Has captureFromDevice');
 assert(annJs.includes('captureFromDeviceId'), 'Has captureFromDeviceId with options');

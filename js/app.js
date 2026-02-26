@@ -1204,6 +1204,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const replayEmptyState = $('replay-empty-state');
     const mimicSelect = $('mimic-select');
     const mimicBtn = $('btn-mimic');
+    const mimicAllBtn = $('btn-mimic-all');
     const captures = Announcements.getCaptures();
 
     if (captures.length === 0) {
@@ -1232,6 +1233,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const connected = BluetoothScanner.getConnectedDevice();
+    const connectedCount = BluetoothScanner.getDevices().filter((d) => d.connected).length;
+    const hasCapture = !!mimicSelect?.value;
     if (mimicSelect) {
       mimicSelect.innerHTML =
         '<option value="">Select captured profile...</option>' +
@@ -1242,7 +1245,8 @@ document.addEventListener('DOMContentLoaded', () => {
           )
           .join('');
     }
-    if (mimicBtn) mimicBtn.disabled = !connected || !mimicSelect?.value;
+    if (mimicBtn) mimicBtn.disabled = !connected || !hasCapture;
+    if (mimicAllBtn) mimicAllBtn.disabled = connectedCount === 0 || !hasCapture;
   }
 
   // Captured list: event delegation for export buttons (no per-item listeners)
@@ -1257,9 +1261,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // Mimic select change — use a single handler, not re-bound each render
   const mimicSelect = $('mimic-select');
   const mimicBtn = $('btn-mimic');
-  mimicSelect?.addEventListener('change', () => {
-    if (mimicBtn) mimicBtn.disabled = !mimicSelect?.value || !BluetoothScanner.getConnectedDevice();
-  });
+  const mimicAllBtn = $('btn-mimic-all');
+  function updateReplayButtons() {
+    const hasCapture = !!mimicSelect?.value;
+    const connected = BluetoothScanner.getConnectedDevice();
+    const connectedCount = BluetoothScanner.getDevices().filter((d) => d.connected).length;
+    if (mimicBtn) mimicBtn.disabled = !hasCapture || !connected;
+    if (mimicAllBtn) mimicAllBtn.disabled = !hasCapture || connectedCount === 0;
+  }
+  mimicSelect?.addEventListener('change', updateReplayButtons);
 
   mimicBtn?.addEventListener('click', async () => {
     const captureId = mimicSelect?.value;
@@ -1270,6 +1280,7 @@ document.addEventListener('DOMContentLoaded', () => {
       statusEl.className = 'mimic-status';
     }
     mimicBtn.disabled = true;
+    if (mimicAllBtn) mimicAllBtn.disabled = true;
     try {
       const result = await Announcements.replayToDevice(captureId);
       if (statusEl) {
@@ -1284,7 +1295,39 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       showToast('Replay failed', 'error');
     } finally {
-      mimicBtn.disabled = false;
+      updateReplayButtons();
+    }
+  });
+
+  mimicAllBtn?.addEventListener('click', async () => {
+    const captureId = mimicSelect?.value;
+    if (!captureId) return;
+    const statusEl = $('mimic-status');
+    const connectedCount = BluetoothScanner.getDevices().filter((d) => d.connected).length;
+    if (statusEl) {
+      statusEl.textContent = `Replaying to ${connectedCount} device(s)...`;
+      statusEl.className = 'mimic-status';
+    }
+    mimicBtn.disabled = true;
+    mimicAllBtn.disabled = true;
+    try {
+      const result = await Announcements.replayToAllConnectedDevices(captureId);
+      if (statusEl) {
+        statusEl.textContent = `Done: ${result.successCount}/${result.totalDevices} devices, ${result.totalWritten} written, ${result.totalFailed} failed`;
+        statusEl.classList.add(result.totalFailed > 0 ? 'mimic-status' : 'mimic-success');
+      }
+      showToast(
+        `Replay to ${result.successCount} device(s): ${result.totalWritten} written`,
+        result.totalFailed > 0 ? 'info' : 'success',
+      );
+    } catch (err) {
+      if (statusEl) {
+        statusEl.textContent = `Failed: ${err?.message || 'Unknown error'}`;
+        statusEl.classList.add('mimic-error');
+      }
+      showToast('Replay failed', 'error');
+    } finally {
+      updateReplayButtons();
     }
   });
 

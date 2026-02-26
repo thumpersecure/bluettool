@@ -1604,6 +1604,16 @@ body {
 .replay-section-main {
   margin-top: 16px;
 }
+.replay-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+.replay-buttons .btn {
+  flex: 1;
+  min-width: 120px;
+}
 .captured-list-replay {
   margin-bottom: 12px;
 }

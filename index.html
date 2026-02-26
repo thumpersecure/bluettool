@@ -637,9 +637,14 @@
             <select id="mimic-select" class="input-field">
               <option value="">Select captured profile...</option>
             </select>
-            <button id="btn-mimic" class="btn btn-warning btn-large" disabled>
-              Replay Captured Data
-            </button>
+            <div class="replay-buttons">
+              <button id="btn-mimic" class="btn btn-warning btn-large" disabled>
+                Replay to Current
+              </button>
+              <button id="btn-mimic-all" class="btn btn-primary btn-large" disabled>
+                Replay to All
+              </button>
+            </div>
             <div id="mimic-status" class="mimic-status"></div>
           </div>
           <div class="empty-state" id="replay-empty-state">
