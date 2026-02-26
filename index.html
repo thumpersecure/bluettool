@@ -280,7 +280,7 @@
 
       <!-- Devices Tab -->
       <section id="devices" class="tab-content" role="tabpanel" aria-labelledby="tab-devices">
-        <div class="card">
+        <div class="card device-list-header-card">
           <div class="device-list-header">
             <div class="device-list-header-top">
               <h2>Discovered Devices</h2>
@@ -299,42 +299,48 @@
                 </ul>
               </div>
             </div>
-            <div class="device-actions device-actions-wrap">
-              <button
-                id="btn-refresh-devices"
-                class="btn btn-secondary btn-small"
-                title="Refresh list"
-              >
-                &#8635; Refresh
-              </button>
-              <select id="device-sort" class="input-select-small">
-                <option value="date-desc">Sort: Newest</option>
-                <option value="date-asc">Sort: Oldest</option>
-                <option value="name-asc">Sort: A–Z</option>
-                <option value="name-desc">Sort: Z–A</option>
-              </select>
-              <select id="device-filter" class="input-select-small">
-                <option value="all">All</option>
-                <option value="connected">Connected</option>
-                <option value="available">Available</option>
-              </select>
-              <button id="btn-clear-devices" class="btn btn-danger btn-small">Clear All</button>
-              <button id="btn-export-devices" class="btn btn-secondary btn-small">
-                Export CSV
-              </button>
-            </div>
+          </div>
+          <div class="device-actions device-actions-wrap device-list-controls">
+            <button
+              id="btn-refresh-devices"
+              class="btn btn-secondary btn-small"
+              title="Refresh list"
+            >
+              &#8635; Refresh
+            </button>
+            <select id="device-sort" class="input-select-small">
+              <option value="date-desc">Sort: Newest</option>
+              <option value="date-asc">Sort: Oldest</option>
+              <option value="name-asc">Sort: A–Z</option>
+              <option value="name-desc">Sort: Z–A</option>
+            </select>
+            <select id="device-filter" class="input-select-small">
+              <option value="all">All</option>
+              <option value="connected">Connected</option>
+              <option value="available">Available</option>
+            </select>
+            <button id="btn-clear-devices" class="btn btn-danger btn-small">Clear All</button>
+            <button id="btn-export-devices" class="btn btn-secondary btn-small">Export CSV</button>
           </div>
         </div>
-        <div id="device-list" class="device-list">
-          <div class="empty-state" id="devices-empty-state">
-            <div class="empty-icon" aria-hidden="true">&#x1F4E1;</div>
-            <p>No devices discovered yet</p>
-            <p class="empty-hint">
-              Tap <strong>Scan</strong> to find nearby BLE devices. Make sure Bluetooth is on.
-            </p>
-            <button type="button" class="empty-cta" id="empty-cta-scan" aria-label="Go to Scan tab">
-              Go to Scan
-            </button>
+
+        <div class="card device-list-card">
+          <div id="device-list" class="device-list">
+            <div class="empty-state" id="devices-empty-state">
+              <div class="empty-icon" aria-hidden="true">&#x1F4E1;</div>
+              <p>No devices discovered yet</p>
+              <p class="empty-hint">
+                Tap <strong>Scan</strong> to find nearby BLE devices. Make sure Bluetooth is on.
+              </p>
+              <button
+                type="button"
+                class="empty-cta"
+                id="empty-cta-scan"
+                aria-label="Go to Scan tab"
+              >
+                Go to Scan
+              </button>
+            </div>
           </div>
         </div>
 
