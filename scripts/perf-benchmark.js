@@ -5,7 +5,7 @@
  * Compares sequential vs parallel dispatch used by all-device light actions.
  */
 
-const { performance } = require('perf_hooks');
+const { performance: perf } = require('perf_hooks');
 
 const RUNS = 6;
 const DEVICE_COUNT = 20;
@@ -28,9 +28,9 @@ async function parallelDispatch(deviceCount, latencyMs) {
 async function averageRuntime(fn) {
   const samples = [];
   for (let i = 0; i < RUNS; i++) {
-    const start = performance.now();
+    const start = perf.now();
     await fn(DEVICE_COUNT, STEP_LATENCY_MS);
-    samples.push(performance.now() - start);
+    samples.push(perf.now() - start);
   }
   const avg = samples.reduce((sum, n) => sum + n, 0) / samples.length;
   return { avg, samples };

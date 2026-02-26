@@ -68,7 +68,7 @@ section('HTML Structure');
 
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 
-assert(html.includes('<!DOCTYPE html>'), 'Has DOCTYPE');
+assert(/<!doctype html>/i.test(html), 'Has DOCTYPE');
 assert(html.includes('viewport-fit=cover'), 'Has viewport-fit=cover for iOS safe areas');
 assert(html.includes('apple-mobile-web-app-capable'), 'Has apple-mobile-web-app-capable meta');
 assert(html.includes('manifest.json'), 'Links to manifest.json');

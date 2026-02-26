@@ -37,11 +37,13 @@ module.exports = [
       globals: {
         ...globals.node,
         ...globals.browser,
+        ...(globals.vitest || {}),
       },
     },
     rules: {
       'no-console': 'off',
       'preserve-caught-error': 'off',
+      'no-redeclare': 'off',
       'no-unused-vars': ['error', { argsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
     },
   },

@@ -14,7 +14,7 @@ Synthetic benchmark (`npm run benchmark:perf`) with:
 
 ## Results
 
-- Sequential average: **362.93 ms**
+- Sequential average: **362.41 ms**
 - Parallel average: **18.22 ms**
 - Improvement: **94.98% faster**
 
