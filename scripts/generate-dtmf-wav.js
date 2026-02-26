@@ -22,7 +22,6 @@ function generateSample(t, freq1, freq2, volume) {
 const numSamples = Math.floor(SAMPLE_RATE * DURATION_SEC * NUM_CHANNELS);
 const dataSize = numSamples * (BITS_PER_SAMPLE / 8);
 const chunkSize = 36 + dataSize;
-const fileSize = 4 + 4 + chunkSize;
 
 const buffer = Buffer.alloc(44 + dataSize);
 let offset = 0;

@@ -1,0 +1,61 @@
+{
+  "name": "bluettool",
+  "version": "1.0.0",
+  "description": "Production-hardened Bluetooth scanner and testing PWA for Bluefy and Chrome.",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thumpersecure/bluettool.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thumpersecure/bluettool/issues"
+  },
+  "homepage": "https://github.com/thumpersecure/bluettool#readme",
+  "keywords": [
+    "bluetooth",
+    "ble",
+    "web-bluetooth",
+    "pwa",
+    "security-testing",
+    "ios",
+    "bluefy",
+    "gatt"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "validate:env": "node scripts/validate-env.js",
+    "lint": "eslint \"js/**/*.js\" \"scripts/**/*.js\" \"tests/**/*.js\" \"*.js\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:legacy": "node tests/test.js",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test": "npm run test:legacy && npm run test:coverage",
+    "benchmark:perf": "node scripts/perf-benchmark.js",
+    "package:dry-run": "npm pack --dry-run",
+    "security:audit": "npm audit --audit-level=high",
+    "ci:check": "npm run validate:env && npm run lint && npm run format:check && npm run test",
+    "release": "semantic-release"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.4.2",
+    "@commitlint/config-conventional": "^20.4.2",
+    "@eslint/js": "^10.0.1",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^12.0.6",
+    "@semantic-release/release-notes-generator": "^14.1.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^10.0.2",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.3.0",
+    "jsdom": "^28.1.0",
+    "prettier": "^3.8.1",
+    "semantic-release": "^25.0.3",
+    "vitest": "^4.0.18"
+  }
+}

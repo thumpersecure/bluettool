@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   function normalizeUuid(uuid) {
@@ -36,7 +36,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function isPlaceholderName(name) {
-    const normalized = String(name || '').trim().toLowerCase();
+    const normalized = String(name || '')
+      .trim()
+      .toLowerCase();
     return normalized.length === 0 || normalized === 'unknown device' || normalized === 'unnamed';
   }
 
@@ -55,51 +57,66 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function getWritableCount(dev) {
-    return (dev?.characteristics || []).filter(ch =>
-      ch.properties?.includes('write') || ch.properties?.includes('writeNoResp')
+    return (dev?.characteristics || []).filter(
+      (ch) => ch.properties?.includes('write') || ch.properties?.includes('writeNoResp'),
     ).length;
   }
 
   function findDeviceAndChar(deviceId, charUuid) {
     const freshDevices = BluetoothScanner.getDevices();
-    const d = freshDevices.find(x => x.id === deviceId);
+    const d = freshDevices.find((x) => x.id === deviceId);
     if (!d) return null;
-    const charInfo = (d.characteristics || []).find(c =>
-      normalizeUuid(c.uuid) === normalizeUuid(charUuid)
+    const charInfo = (d.characteristics || []).find(
+      (c) => normalizeUuid(c.uuid) === normalizeUuid(charUuid),
     );
     return charInfo ? { device: d, charInfo } : null;
   }
 
   function isValidServiceFilter(value) {
-    return /^[a-z_]+$/i.test(value) ||
+    return (
+      /^[a-z_]+$/i.test(value) ||
       /^[0-9a-fA-F]{4}$/.test(value) ||
-      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value)
+    );
   }
 
   function isValidHexInput(value) {
     const clean = String(value || '').replace(/[:\s]/g, '');
-    return clean.length > 0 && clean.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(clean);
+    const MAX_HEX_INPUT_BYTES = 512;
+    return (
+      clean.length > 0 &&
+      clean.length % 2 === 0 &&
+      /^[0-9a-fA-F]+$/.test(clean) &&
+      clean.length / 2 <= MAX_HEX_INPUT_BYTES
+    );
   }
 
-  async function runLightTestAction(deviceId, action, buttonEl) {
+  async function runLightTestAction(deviceId, action, buttonEl, options = {}) {
+    const showNotifications = options.showNotifications !== false;
     const devices = BluetoothScanner.getDevices();
-    const dev = devices.find(d => d.id === deviceId);
+    const dev = devices.find((d) => d.id === deviceId);
     if (!dev || !dev.connected) {
-      showToast('Connect to this device before running light tests', 'error');
+      if (showNotifications) {
+        showToast('Connect to this device before running light tests', 'error');
+      }
       return;
     }
     const plan = dev.lightTestPlan;
     const actionSpec = plan?.actions?.[action];
     if (!plan?.available || !actionSpec) {
-      showToast('No compatible test command found from GATT profile', 'error');
+      if (showNotifications) {
+        showToast('No compatible test command found from GATT profile', 'error');
+      }
       return;
     }
 
-    const targetChar = (dev.characteristics || []).find(ch =>
-      normalizeUuid(ch.uuid) === normalizeUuid(plan.targetCharUuid)
+    const targetChar = (dev.characteristics || []).find(
+      (ch) => normalizeUuid(ch.uuid) === normalizeUuid(plan.targetCharUuid),
     );
     if (!targetChar) {
-      showToast('Suggested test characteristic is no longer available', 'error');
+      if (showNotifications) {
+        showToast('Suggested test characteristic is no longer available', 'error');
+      }
       return;
     }
 
@@ -116,9 +133,16 @@ document.addEventListener('DOMContentLoaded', () => {
           await sleep(actionSpec.delayMs);
         }
       }
-      showToast(`${actionSpec.label || action} test sent`, 'success');
+      if (showNotifications) {
+        showToast(`${actionSpec.label || action} test sent`, 'success');
+      }
     } catch (err) {
-      showToast(`Test failed: ${err?.message || 'write error'}`, 'error');
+      if (showNotifications) {
+        showToast(`Test failed: ${err?.message || 'write error'}`, 'error');
+      }
+      if (!showNotifications) {
+        throw err;
+      }
     } finally {
       if (buttonEl) {
         buttonEl.disabled = false;
@@ -149,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Confirm Dialog ---
   function showConfirm(title, message) {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       const dialog = $('confirm-dialog');
       const titleEl = $('confirm-title');
       const messageEl = $('confirm-message');
@@ -172,8 +196,12 @@ document.addEventListener('DOMContentLoaded', () => {
         dialog.removeEventListener('click', onOverlayClick);
         resolve(result);
       }
-      function onOk() { cleanup(true); }
-      function onCancel() { cleanup(false); }
+      function onOk() {
+        cleanup(true);
+      }
+      function onCancel() {
+        cleanup(false);
+      }
       function onOverlayClick(e) {
         if (e.target === dialog) cleanup(false);
       }
@@ -209,7 +237,9 @@ document.addEventListener('DOMContentLoaded', () => {
         delete map[deviceId];
       }
       localStorage.setItem(DEVICE_NOTES_KEY, JSON.stringify(map));
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   // --- Settings (localStorage) ---
@@ -223,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
     volume: 50,
     scanTimeout: 0,
     defaultSort: 'date-desc',
-    defaultFilter: 'all'
+    defaultFilter: 'all',
   };
 
   function loadSettings() {
@@ -240,7 +270,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function saveSettings(settings) {
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   function loadFavorites() {
@@ -257,7 +289,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function saveFavorites(ids) {
     try {
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids));
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   function toggleFavorite(deviceId) {
@@ -279,7 +313,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function saveLastConnected(deviceId) {
     try {
       localStorage.setItem(LAST_CONNECTED_KEY, deviceId);
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   function loadLastConnected() {
@@ -293,7 +329,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function clearLastConnected() {
     try {
       localStorage.removeItem(LAST_CONNECTED_KEY);
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   function applySettings(settings) {
@@ -342,12 +380,19 @@ document.addEventListener('DOMContentLoaded', () => {
       volume: volSlider ? parseInt(volSlider.value, 10) : s.volume,
       scanTimeout: scanTimeout ? parseInt(scanTimeout.value, 10) : s.scanTimeout,
       defaultSort: defaultSort ? defaultSort.value : s.defaultSort,
-      defaultFilter: defaultFilter ? defaultFilter.value : s.defaultFilter
+      defaultFilter: defaultFilter ? defaultFilter.value : s.defaultFilter,
     };
   }
 
   // --- Initialize ---
   Logger.init();
+  window.addEventListener('error', (event) => {
+    Logger.error(`Unhandled error: ${event.message || 'unknown error'}`);
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason?.message || event.reason || 'unknown rejection';
+    Logger.error(`Unhandled promise rejection: ${reason}`);
+  });
   Logger.info('BlueTTool initialized — Bluefy mobile app');
   Logger.info('Checking browser compatibility...');
   BluetoothScanner.checkSupport();
@@ -359,14 +404,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const tabs = document.querySelectorAll('.tab');
   const tabContents = document.querySelectorAll('.tab-content');
 
-  tabs.forEach(tab => {
+  tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.tab;
-      tabs.forEach(t => {
+      tabs.forEach((t) => {
         t.classList.remove('active');
         t.setAttribute('aria-selected', 'false');
       });
-      tabContents.forEach(tc => tc.classList.remove('active'));
+      tabContents.forEach((tc) => tc.classList.remove('active'));
       tab.classList.add('active');
       tab.setAttribute('aria-selected', 'true');
       const targetEl = document.getElementById(target);
@@ -402,7 +447,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (resetFilterBtn) {
       e.stopPropagation();
       const filterEl = $('device-filter');
-      if (filterEl) { filterEl.value = 'all'; renderDeviceList(); }
+      if (filterEl) {
+        filterEl.value = 'all';
+        renderDeviceList();
+      }
       return;
     }
     const reconnectBtn = e.target.closest('.btn-reconnect');
@@ -449,7 +497,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (btnSerialConnect && typeof SerialBluetooth !== 'undefined') {
     function updateSerialButton() {
-      btnSerialConnect.textContent = SerialBluetooth.isConnected() ? 'Disconnect Classic BT' : 'Connect Classic BT Device';
+      btnSerialConnect.textContent = SerialBluetooth.isConnected()
+        ? 'Disconnect Classic BT'
+        : 'Connect Classic BT Device';
     }
     btnSerialConnect.addEventListener('click', async () => {
       if (!SerialBluetooth.isSupported()) {
@@ -493,7 +543,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (svcFilterEnabled && svcValue) {
       if (!isValidServiceFilter(svcValue)) {
-        showToast('Invalid service filter. Use a named UUID (heart_rate), 16-bit, or full 128-bit UUID.', 'error');
+        showToast(
+          'Invalid service filter. Use a named UUID (heart_rate), 16-bit, or full 128-bit UUID.',
+          'error',
+        );
         return;
       }
       options.services = [svcValue];
@@ -558,13 +611,17 @@ document.addEventListener('DOMContentLoaded', () => {
     saveSettings(s);
   }
   $('device-sort')?.addEventListener('change', () => onDeviceListPrefChange('sort', 'defaultSort'));
-  $('device-filter')?.addEventListener('change', () => onDeviceListPrefChange('filter', 'defaultFilter'));
+  $('device-filter')?.addEventListener('change', () =>
+    onDeviceListPrefChange('filter', 'defaultFilter'),
+  );
 
   $('btn-clear-devices')?.addEventListener('click', async () => {
     const devices = BluetoothScanner.getDevices();
     if (devices.length === 0) return;
-    const confirmed = await showConfirm('Clear All Devices',
-      `Remove ${devices.length} device(s) from the list? Connected devices will be disconnected.`);
+    const confirmed = await showConfirm(
+      'Clear All Devices',
+      `Remove ${devices.length} device(s) from the list? Connected devices will be disconnected.`,
+    );
     if (!confirmed) return;
     BluetoothScanner.clearDevices();
     clearLastConnected();
@@ -586,9 +643,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let filtered = devices;
     if (filterVal === 'connected') {
-      filtered = devices.filter(d => d.connected);
+      filtered = devices.filter((d) => d.connected);
     } else if (filterVal === 'available') {
-      filtered = devices.filter(d => !d.connected);
+      filtered = devices.filter((d) => !d.connected);
     }
 
     const sorted = [...filtered].sort((a, b) => {
@@ -648,15 +705,16 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    list.innerHTML = devices.map(dev => {
-      const displayName = getDisplayName(dev);
-      const deviceTypeLabel = getDeviceTypeLabel(dev);
-      const plan = dev.lightTestPlan;
-      const hasLightPlan = !!(plan?.available);
-      const writableCount = getWritableCount(dev);
-      const pinned = isFavorite(dev.id);
-      const hasNotes = !!getDeviceNotes(dev.id);
-      return `
+    list.innerHTML = devices
+      .map((dev) => {
+        const displayName = getDisplayName(dev);
+        const deviceTypeLabel = getDeviceTypeLabel(dev);
+        const plan = dev.lightTestPlan;
+        const hasLightPlan = !!plan?.available;
+        const writableCount = getWritableCount(dev);
+        const pinned = isFavorite(dev.id);
+        const hasNotes = !!getDeviceNotes(dev.id);
+        return `
       <div class="device-item${dev.connected ? ' connected-glow' : ''}" data-device-id="${escapeHtml(dev.id)}">
         <div class="device-item-header">
           <button class="btn btn-ghost btn-pin" data-device-id="${escapeHtml(dev.id)}" title="${pinned ? 'Unpin' : 'Pin to top'}" aria-label="${pinned ? 'Unpin' : 'Pin to top'}">${pinned ? '&#128204;' : '&#128205;'}</button>
@@ -678,17 +736,26 @@ document.addEventListener('DOMContentLoaded', () => {
           ${(dev.characteristics || []).length > 0 ? `<span class="device-tag tag-char">${(dev.characteristics || []).length} char</span>` : ''}
           <span class="device-tag tag-time">${new Date(dev.discovered).toLocaleTimeString()}</span>
         </div>
-        ${dev.connected && hasLightPlan ? `<div class="device-quick-actions">
+        ${
+          dev.connected && hasLightPlan
+            ? `<div class="device-quick-actions">
           <button class="btn btn-warning btn-small btn-light-test" data-action="flash" data-device-id="${escapeHtml(dev.id)}" ${plan.actions?.flash ? '' : 'disabled'}>Flash</button>
           <button class="btn btn-primary btn-small btn-light-test" data-action="color" data-device-id="${escapeHtml(dev.id)}" ${plan.actions?.color ? '' : 'disabled'}>Color</button>
           <button class="btn btn-danger btn-small btn-light-test" data-action="off" data-device-id="${escapeHtml(dev.id)}" ${plan.actions?.off ? '' : 'disabled'}>Off</button>
-        </div>` : ''}
-        ${!dev.connected ? `<div class="device-quick-actions">
+        </div>`
+            : ''
+        }
+        ${
+          !dev.connected
+            ? `<div class="device-quick-actions">
           <button class="btn btn-secondary btn-small btn-reconnect" data-device-id="${escapeHtml(dev.id)}">Reconnect</button>
-        </div>` : ''}
+        </div>`
+            : ''
+        }
       </div>
     `;
-    }).join('');
+      })
+      .join('');
 
     // Update captures section
     renderCaptures();
@@ -702,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const lastId = loadLastConnected();
     const devices = BluetoothScanner.getDevices();
-    const dev = devices.find(d => d.id === lastId);
+    const dev = devices.find((d) => d.id === lastId);
 
     if (lastId && dev && !dev.connected) {
       card.classList.remove('hidden');
@@ -737,7 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Device Detail Panel ---
   function showDeviceDetail(deviceId) {
     const devices = BluetoothScanner.getDevices();
-    const dev = devices.find(d => d.id === deviceId);
+    const dev = devices.find((d) => d.id === deviceId);
     if (!dev) return;
 
     const panel = $('device-detail');
@@ -768,21 +835,33 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="detail-label">Device ID</span>
           <span class="detail-value detail-value-mono">${escapeHtml(dev.id)}</span>
         </div>
-        ${dev.manufacturer ? `
+        ${
+          dev.manufacturer
+            ? `
         <div class="detail-row">
           <span class="detail-label">Manufacturer</span>
           <span class="detail-value">${escapeHtml(dev.manufacturer)}</span>
-        </div>` : ''}
-        ${dev.model ? `
+        </div>`
+            : ''
+        }
+        ${
+          dev.model
+            ? `
         <div class="detail-row">
           <span class="detail-label">Model</span>
           <span class="detail-value">${escapeHtml(dev.model)}</span>
-        </div>` : ''}
-        ${deviceTypeLabel ? `
+        </div>`
+            : ''
+        }
+        ${
+          deviceTypeLabel
+            ? `
         <div class="detail-row">
           <span class="detail-label">Type</span>
           <span class="detail-value">${escapeHtml(deviceTypeLabel)}</span>
-        </div>` : ''}
+        </div>`
+            : ''
+        }
         <div class="detail-row">
           <span class="detail-label">Status</span>
           <span class="detail-value ${dev.connected ? 'val-connected' : 'val-disconnected'}">
@@ -834,11 +913,13 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="detail-section light-test-section">
         <h3>Smart Light Test Commands</h3>
         <p class="hint light-test-hint">
-          ${dev.connected
-            ? (writableCount > 0
-              ? 'Connected. No light-specific signature found yet. Reconnect to re-enumerate or use manual Write controls below.'
-              : 'Connected, but no writable GATT characteristics were found for test commands.')
-            : 'Connect & enumerate this device to reveal Flash/Color/Off light testing options.'}
+          ${
+            dev.connected
+              ? writableCount > 0
+                ? 'Connected. No light-specific signature found yet. Reconnect to re-enumerate or use manual Write controls below.'
+                : 'Connected, but no writable GATT characteristics were found for test commands.'
+              : 'Connect & enumerate this device to reveal Flash/Color/Off light testing options.'
+          }
         </p>
       </div>
       `;
@@ -861,13 +942,13 @@ document.addEventListener('DOMContentLoaded', () => {
           <strong>${escapeHtml(svc.name)}</strong>
           <div class="service-uuid">${escapeHtml(svc.uuid)}</div>`;
 
-        for (const char of (svc.characteristics || [])) {
+        for (const char of svc.characteristics || []) {
           const props = char.properties || [];
           html += `<div class="char-item">
             <div><strong>${escapeHtml(char.name)}</strong></div>
             <div class="char-uuid">${escapeHtml(char.uuid)}</div>
             <div class="char-props">
-              ${props.map(p => `<span class="char-prop-tag">${escapeHtml(p)}</span>`).join('')}
+              ${props.map((p) => `<span class="char-prop-tag">${escapeHtml(p)}</span>`).join('')}
             </div>`;
 
           if (char.value) {
@@ -981,8 +1062,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const lightTestBtn = e.target.closest('.btn-detail-light-test');
     if (lightTestBtn) {
       e.stopPropagation();
-      await runLightTestAction(lightTestBtn.dataset.deviceId, lightTestBtn.dataset.action, lightTestBtn);
-      if (BluetoothScanner.getDevices().find(x => x.id === deviceId)) {
+      await runLightTestAction(
+        lightTestBtn.dataset.deviceId,
+        lightTestBtn.dataset.action,
+        lightTestBtn,
+      );
+      if (BluetoothScanner.getDevices().find((x) => x.id === deviceId)) {
         showDeviceDetail(deviceId);
         renderDeviceList();
       }
@@ -1010,12 +1095,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const charNotifyBtn = e.target.closest('.btn-char-notify');
     if (charNotifyBtn) {
       e.stopPropagation();
-      const found = findDeviceAndChar(charNotifyBtn.dataset.deviceId, charNotifyBtn.dataset.charUuid);
+      const found = findDeviceAndChar(
+        charNotifyBtn.dataset.deviceId,
+        charNotifyBtn.dataset.charUuid,
+      );
       if (!found) return;
       charNotifyBtn.disabled = true;
       charNotifyBtn.textContent = 'Subscribing...';
       try {
-        await BluetoothScanner.subscribeNotifications(found.charInfo, () => showDeviceDetail(deviceId));
+        await BluetoothScanner.subscribeNotifications(found.charInfo, () =>
+          showDeviceDetail(deviceId),
+        );
         charNotifyBtn.textContent = 'Subscribed';
         showToast('Subscribed to notifications', 'success');
       } catch (_) {
@@ -1029,7 +1119,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const writeToggleBtn = e.target.closest('.btn-char-write-toggle');
     if (writeToggleBtn) {
       e.stopPropagation();
-      const form = content?.querySelector(`.char-write-form[data-write-for="${writeToggleBtn.dataset.charUuid}"]`);
+      const form = content?.querySelector(
+        `.char-write-form[data-write-for="${writeToggleBtn.dataset.charUuid}"]`,
+      );
       if (form) form.classList.toggle('hidden');
       return;
     }
@@ -1041,9 +1133,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const input = content?.querySelector(`.char-write-input[data-char-uuid="${charUuid}"]`);
       if (!input) return;
       const hexVal = input.value.trim();
-      if (!hexVal) { showToast('Enter a hex value first', 'error'); return; }
+      if (!hexVal) {
+        showToast('Enter a hex value first', 'error');
+        return;
+      }
       if (!isValidHexInput(hexVal)) {
-        showToast('Invalid hex format. Use an even number of bytes (e.g., FF or 01:FF:AB).', 'error');
+        showToast(
+          'Invalid hex format. Use an even number of bytes (e.g., FF or 01:FF:AB), up to 512 bytes.',
+          'error',
+        );
         return;
       }
       const found = findDeviceAndChar(writeSendBtn.dataset.deviceId, charUuid);
@@ -1055,12 +1153,17 @@ document.addEventListener('DOMContentLoaded', () => {
         await BluetoothScanner.writeCharacteristic(charInfo, hexVal);
         showToast('Value written', 'success');
         writeSendBtn.textContent = 'Sent!';
-        setTimeout(() => { writeSendBtn.textContent = 'Send'; writeSendBtn.disabled = false; }, 1500);
+        setTimeout(() => {
+          writeSendBtn.textContent = 'Send';
+          writeSendBtn.disabled = false;
+        }, 1500);
         if ((charInfo.properties || []).includes('read')) {
           try {
             await BluetoothScanner.readCharacteristic(charInfo);
             showDeviceDetail(deviceId);
-          } catch (_) { /* ok */ }
+          } catch (_) {
+            /* ok */
+          }
         }
       } catch (_) {
         writeSendBtn.disabled = false;
@@ -1114,20 +1217,30 @@ document.addEventListener('DOMContentLoaded', () => {
     if (replaySection) replaySection.style.display = 'block';
 
     if (capturedList) {
-      capturedList.innerHTML = captures.map(cap => `
+      capturedList.innerHTML = captures
+        .map(
+          (cap) => `
         <div class="captured-item">
           <strong>${escapeHtml(cap.deviceName)}</strong>
           <div class="captured-detail">${new Date(cap.timestamp).toLocaleString()}</div>
           <div class="captured-detail">Services: ${cap.services.length} | Chars: ${cap.totalChars} (${cap.readableChars} readable)</div>
           <button class="btn btn-secondary btn-small btn-export-capture" data-capture-id="${cap.id}">Export JSON</button>
         </div>
-      `).join('');
+      `,
+        )
+        .join('');
     }
 
     const connected = BluetoothScanner.getConnectedDevice();
     if (mimicSelect) {
-      mimicSelect.innerHTML = '<option value="">Select captured profile...</option>' +
-        captures.map(c => `<option value="${c.id}">${escapeHtml(c.deviceName)} (${new Date(c.timestamp).toLocaleTimeString()})</option>`).join('');
+      mimicSelect.innerHTML =
+        '<option value="">Select captured profile...</option>' +
+        captures
+          .map(
+            (c) =>
+              `<option value="${c.id}">${escapeHtml(c.deviceName)} (${new Date(c.timestamp).toLocaleTimeString()})</option>`,
+          )
+          .join('');
     }
     if (mimicBtn) mimicBtn.disabled = !connected || !mimicSelect?.value;
   }
@@ -1231,49 +1344,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Tools Tab: Lights (Flash All, Turn Off All, Set Color) ---
   async function runLightActionOnAllDevices(action, colorHex) {
-    let devices = BluetoothScanner.getDevices().filter(d => d.connected && d.lightTestPlan?.available);
+    let devices = BluetoothScanner.getDevices().filter(
+      (d) => d.connected && d.lightTestPlan?.available,
+    );
     if (action === 'color' && colorHex) {
-      devices = devices.filter(d => d.lightTestPlan?.actions?.color);
+      devices = devices.filter((d) => d.lightTestPlan?.actions?.color);
     }
     if (devices.length === 0) {
-      showToast(action === 'color'
-        ? 'No connected RGB lights. Connect color-capable lights in Devices tab first.'
-        : 'No connected smart lights. Connect lights in Devices tab first.', 'error');
+      showToast(
+        action === 'color'
+          ? 'No connected RGB lights. Connect color-capable lights in Devices tab first.'
+          : 'No connected smart lights. Connect lights in Devices tab first.',
+        'error',
+      );
       return;
     }
-    let success = 0;
-    let fail = 0;
-    for (const dev of devices) {
-      try {
+    const settled = await Promise.allSettled(
+      devices.map((dev) => {
         if (action === 'color' && colorHex) {
-          await runLightTestActionWithColor(dev.id, colorHex);
-        } else {
-          await runLightTestAction(dev.id, action, null);
+          return runLightTestActionWithColor(dev.id, colorHex);
         }
-        success++;
-      } catch (err) {
-        fail++;
-      }
-    }
+        return runLightTestAction(dev.id, action, null, { showNotifications: false });
+      }),
+    );
+    const success = settled.filter((r) => r.status === 'fulfilled').length;
+    const fail = settled.length - success;
     showToast(`Lights: ${success} ok, ${fail} failed`, success > 0 ? 'success' : 'error');
   }
 
   async function runLightTestActionWithColor(deviceId, hexColor) {
     const devices = BluetoothScanner.getDevices();
-    const dev = devices.find(d => d.id === deviceId);
+    const dev = devices.find((d) => d.id === deviceId);
     if (!dev || !dev.connected) throw new Error('Device not connected');
     const plan = dev.lightTestPlan;
     if (!plan?.available || !plan.targetCharUuid) throw new Error('No light plan');
-    const targetChar = (dev.characteristics || []).find(ch =>
-      normalizeUuid(ch.uuid) === normalizeUuid(plan.targetCharUuid)
+    const targetChar = (dev.characteristics || []).find(
+      (ch) => normalizeUuid(ch.uuid) === normalizeUuid(plan.targetCharUuid),
     );
     if (!targetChar) throw new Error('Characteristic not found');
-    const hex = String(hexColor || '#ff0000').replace(/^#/, '').slice(0, 6);
+    const hex = String(hexColor || '#ff0000')
+      .replace(/^#/, '')
+      .slice(0, 6);
     if (hex.length < 6) throw new Error('Invalid color format');
     const r = Math.min(255, Math.max(0, parseInt(hex.slice(0, 2), 16) || 0));
     const g = Math.min(255, Math.max(0, parseInt(hex.slice(2, 4), 16) || 0));
     const b = Math.min(255, Math.max(0, parseInt(hex.slice(4, 6), 16) || 0));
-    const colorHex = [r, g, b].map(v => v.toString(16).padStart(2, '0')).join(':');
+    const colorHex = [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join(':');
     await BluetoothScanner.writeCharacteristic(targetChar, colorHex);
   }
 
@@ -1310,10 +1426,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('btn-silence-all')?.addEventListener('click', async () => {
     const devices = BluetoothScanner.getDevices();
-    const connCount = devices.filter(d => d.connected).length;
+    const connCount = devices.filter((d) => d.connected).length;
     if (connCount > 0) {
-      const confirmed = await showConfirm('Silence All',
-        `Stop audio and disconnect ${connCount} device(s)?`);
+      const confirmed = await showConfirm(
+        'Silence All',
+        `Stop audio and disconnect ${connCount} device(s)?`,
+      );
       if (!confirmed) return;
     }
     AudioPlayer.stopAll();
@@ -1331,7 +1449,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Sharing ---
   $('btn-share-audio')?.addEventListener('click', async () => {
     const ok = await Sharing.shareAudioFile();
-    showToast(ok ? 'Audio shared' : 'Audio downloaded (share not available)', ok ? 'success' : 'info');
+    showToast(
+      ok ? 'Audio shared' : 'Audio downloaded (share not available)',
+      ok ? 'success' : 'info',
+    );
   });
 
   $('btn-share-hearts')?.addEventListener('click', async () => {
@@ -1341,9 +1462,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('btn-share-link')?.addEventListener('click', async () => {
     const ok = await Sharing.shareLink(
-      'https://thumpersecure.github.io/bluettool/',
+      window.BLUETTOOL_APP_URL || 'https://thumpersecure.github.io/bluettool/',
       'BlueTTool',
-      'BLE scanner and testing tool for Bluefy on iOS'
+      'BLE scanner and testing tool for Bluefy on iOS',
     );
     showToast(ok ? 'Link shared' : 'Link copied to clipboard', ok ? 'success' : 'info');
   });
@@ -1388,10 +1509,12 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Lights off', 'success');
           } else if (actionId === 'silence_all') {
             const devices = BluetoothScanner.getDevices();
-            const connCount = devices.filter(d => d.connected).length;
+            const connCount = devices.filter((d) => d.connected).length;
             if (connCount > 0) {
-              const confirmed = await showConfirm('Silence All',
-                `Stop audio and disconnect ${connCount} device(s)?`);
+              const confirmed = await showConfirm(
+                'Silence All',
+                `Stop audio and disconnect ${connCount} device(s)?`,
+              );
               if (!confirmed) return;
             }
             if (typeof AudioPlayer !== 'undefined') AudioPlayer.stopAll();
@@ -1442,9 +1565,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!list) return;
     const macros = typeof Macros !== 'undefined' ? Macros.getMacros() : [];
     if (macros.length === 0) {
-      list.innerHTML = '<div class="macros-empty"><div class="empty-icon" aria-hidden="true">&#x2699;</div><p>No macros yet</p><p class="empty-hint">Add one to automate light tests: delay → flash → off.</p></div>';
+      list.innerHTML =
+        '<div class="macros-empty"><div class="empty-icon" aria-hidden="true">&#x2699;</div><p>No macros yet</p><p class="empty-hint">Add one to automate light tests: delay → flash → off.</p></div>';
     } else {
-      list.innerHTML = macros.map(m => `
+      list.innerHTML = macros
+        .map(
+          (m) => `
         <div class="macro-item" data-macro-id="${escapeHtml(m.id)}">
           <div class="macro-item-name">${escapeHtml(m.name)}</div>
           <div class="macro-item-steps">${(m.steps || []).length} steps</div>
@@ -1453,7 +1579,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="btn btn-danger btn-small btn-delete-macro" data-macro-id="${escapeHtml(m.id)}">Delete</button>
           </div>
         </div>
-      `).join('');
+      `,
+        )
+        .join('');
     }
     if (form) form.classList.add('hidden');
   }
@@ -1503,11 +1631,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       },
       replay: (captureId) => Announcements.replayToDevice(captureId),
-      connectDevice: (deviceId) => BluetoothScanner.connect(deviceId)
+      connectDevice: (deviceId) => BluetoothScanner.connect(deviceId),
     };
     try {
       const result = await Macros.runMacro(macroId, executor);
-      showToast(`Macro done: ${result.success} ok, ${result.failed} failed`, result.failed > 0 ? 'info' : 'success');
+      showToast(
+        `Macro done: ${result.success} ok, ${result.failed} failed`,
+        result.failed > 0 ? 'info' : 'success',
+      );
     } catch (err) {
       showToast(err?.message || 'Macro failed', 'error');
     }
@@ -1531,7 +1662,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { type: 'delay', ms: 500 },
       { type: 'light_flash', deviceId: 'all' },
       { type: 'delay', ms: 1000 },
-      { type: 'light_off', deviceId: 'all' }
+      { type: 'light_off', deviceId: 'all' },
     ];
     Macros.createMacro(name, steps);
     $('macro-form')?.classList.add('hidden');
@@ -1580,7 +1711,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateParallelDeviceCount() {
     const allDevices = BluetoothScanner.getDevices();
-    const available = allDevices.filter(d => !d.connected).length;
+    const available = allDevices.filter((d) => !d.connected).length;
     if (parallelDeviceCount) {
       parallelDeviceCount.textContent = `${available} device${available !== 1 ? 's' : ''} available for parallel scan`;
     }
@@ -1604,15 +1735,17 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    poolList.innerHTML = agentList.map(agent => {
-      const stateClass = 'agent-' + agent.state;
-      const elapsed = agent.endTime && agent.startTime
-        ? ((agent.endTime - agent.startTime) / 1000).toFixed(1)
-        : agent.startTime
-          ? (((Date.now()) - agent.startTime) / 1000).toFixed(1)
-          : '—';
-      const lastMsg = agent.log.length > 0 ? agent.log[agent.log.length - 1].message : '';
-      return `
+    poolList.innerHTML = agentList
+      .map((agent) => {
+        const stateClass = 'agent-' + agent.state;
+        const elapsed =
+          agent.endTime && agent.startTime
+            ? ((agent.endTime - agent.startTime) / 1000).toFixed(1)
+            : agent.startTime
+              ? ((Date.now() - agent.startTime) / 1000).toFixed(1)
+              : '—';
+        const lastMsg = agent.log.length > 0 ? agent.log[agent.log.length - 1].message : '';
+        return `
         <div class="agent-pool-item ${stateClass}">
           <div class="agent-pool-header">
             <span class="agent-pool-name">#${agent.id} ${escapeHtml(agent.deviceName)}</span>
@@ -1624,7 +1757,8 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
       `;
-    }).join('');
+      })
+      .join('');
 
     const counts = Advanced.getAgentCount();
     const runningEl = $('parallel-running');
@@ -1763,8 +1897,10 @@ document.addEventListener('DOMContentLoaded', () => {
       `Characteristics: ${aggregate.totalCharacteristics}`,
       `Readable: ${aggregate.totalReadable}`,
       `Writable: ${aggregate.totalWritable}`,
-      `High Risk: ${aggregate.highRiskDevices}`
-    ].map(s => `<span class="aggregate-stat">${s}</span>`).join('');
+      `High Risk: ${aggregate.highRiskDevices}`,
+    ]
+      .map((s) => `<span class="aggregate-stat">${s}</span>`)
+      .join('');
 
     const a = aggregate.analysis || {};
     const summary = Array.isArray(a.summary) ? a.summary : [];
@@ -1773,17 +1909,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let html = '<div class="agent-results-section">';
     html += '<h3>Summary</h3>';
-    html += '<ul>' + summary.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
+    html += '<ul>' + summary.map((s) => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
 
     if (riskFactors.length > 0) {
       html += '<h3>Findings</h3>';
-      html += '<ul class="agent-risks">' +
-        riskFactors.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
+      html +=
+        '<ul class="agent-risks">' +
+        riskFactors.map((r) => `<li>${escapeHtml(r)}</li>`).join('') +
+        '</ul>';
     }
 
     if (recommendations.length > 0) {
       html += '<h3>Recommendations</h3>';
-      html += '<ul>' + recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
+      html += '<ul>' + recommendations.map((r) => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
     }
 
     html += '</div>';
@@ -1804,7 +1942,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     resultsEl.innerHTML = html;
 
-    const highestRiskResult = aggregate.agentResults?.find(r => r.vulnReport);
+    const highestRiskResult = aggregate.agentResults?.find((r) => r.vulnReport);
     if (highestRiskResult?.vulnReport) {
       renderVulnReport(highestRiskResult.vulnReport);
     }
@@ -1843,16 +1981,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let html = '<div class="agent-results-section">';
     html += '<h3>Summary</h3>';
-    html += '<ul>' + summary.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
+    html += '<ul>' + summary.map((s) => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
 
     if (riskFactors.length > 0) {
       html += '<h3>Findings</h3>';
-      html += '<ul class="agent-risks">' +
-        riskFactors.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
+      html +=
+        '<ul class="agent-risks">' +
+        riskFactors.map((r) => `<li>${escapeHtml(r)}</li>`).join('') +
+        '</ul>';
     }
 
     html += '<h3>Recommendations</h3>';
-    html += '<ul>' + recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
+    html += '<ul>' + recommendations.map((r) => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>';
     html += '</div>';
 
     agentResultsEl.innerHTML = html;
@@ -1886,15 +2026,20 @@ document.addEventListener('DOMContentLoaded', () => {
       `Writable: ${report.stats.totalWritable}`,
       `Sensitive: ${report.stats.sensitiveExposed}`,
       `Notify: ${report.stats.notifyChars}`,
-      `Findings: ${report.findings.length}`
-    ].map(s => `<span class="vuln-stat">${s}</span>`).join('');
+      `Findings: ${report.findings.length}`,
+    ]
+      .map((s) => `<span class="vuln-stat">${s}</span>`)
+      .join('');
 
     // Findings
     const findingsEl = $('vuln-findings');
     if (report.findings.length === 0) {
-      findingsEl.innerHTML = '<div style="font-size:12px;color:var(--text-hint);text-align:center;padding:12px;">No vulnerability findings</div>';
+      findingsEl.innerHTML =
+        '<div style="font-size:12px;color:var(--text-hint);text-align:center;padding:12px;">No vulnerability findings</div>';
     } else {
-      findingsEl.innerHTML = report.findings.map(f => `
+      findingsEl.innerHTML = report.findings
+        .map(
+          (f) => `
         <div class="vuln-finding sev-${f.severity}">
           <div class="vuln-finding-header">
             <span class="vuln-sev-badge sev-${f.severity}">${escapeHtml(f.severity)}</span>
@@ -1903,18 +2048,25 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="vuln-finding-detail">${escapeHtml(f.detail)}</div>
           <div class="vuln-finding-category">${escapeHtml(f.category)}</div>
         </div>
-      `).join('');
+      `,
+        )
+        .join('');
     }
 
     // Recommendations
     const recsEl = $('vuln-recommendations');
-    recsEl.innerHTML = '<h3>Recommendations</h3>' +
-      report.recommendations.map(r => `
+    recsEl.innerHTML =
+      '<h3>Recommendations</h3>' +
+      report.recommendations
+        .map(
+          (r) => `
         <div class="vuln-rec">
           <span class="vuln-rec-priority pri-${r.priority}">${escapeHtml(r.priority)}</span>
           ${escapeHtml(r.text)}
         </div>
-      `).join('');
+      `,
+        )
+        .join('');
   }
 
   // --- Calls Tab ---
@@ -1960,8 +2112,10 @@ document.addEventListener('DOMContentLoaded', () => {
   btnClearCalls?.addEventListener('click', async () => {
     const calls = CallHistory.getCalls();
     if (calls.length === 0) return;
-    const confirmed = await showConfirm('Clear Call History',
-      `Remove ${calls.length} call(s) from the list?`);
+    const confirmed = await showConfirm(
+      'Clear Call History',
+      `Remove ${calls.length} call(s) from the list?`,
+    );
     if (!confirmed) return;
     CallHistory.clearCalls();
     renderCallList();
@@ -1980,18 +2134,22 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>`;
       return;
     }
-    callList.innerHTML = calls.map(c => `
+    callList.innerHTML = calls
+      .map(
+        (c) => `
       <div class="call-item">
         <span class="call-item-date">${escapeHtml(c.date)}</span>
         <span class="call-item-number">${escapeHtml(c.name || c.number)}</span>
         <span class="call-item-duration">${escapeHtml(c.duration)}</span>
         <span class="call-item-type">${escapeHtml(c.type)}</span>
       </div>
-    `).join('');
+    `,
+      )
+      .join('');
   }
 
   // --- Settings Tab ---
-  document.querySelectorAll('.settings-toggle').forEach(btn => {
+  document.querySelectorAll('.settings-toggle').forEach((btn) => {
     btn.addEventListener('click', () => {
       const panelId = 'panel-' + btn.dataset.toggle;
       const panel = $(panelId);

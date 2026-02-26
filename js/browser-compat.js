@@ -8,7 +8,7 @@ const BrowserCompat = (() => {
   const ua = navigator.userAgent || '';
   const isBluefy = /Bluefy/.test(ua);
   const isWebBLE = /WebBLE/.test(ua);
-  const isChrome = /Chrome/.test(ua) && !/Edge/.test(ua);
+  const isChrome = /Chrome\//.test(ua) && !/(Edg|Edge)\//.test(ua);
   const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
 
   const hasWebBluetooth = !!navigator.bluetooth;
@@ -40,14 +40,14 @@ const BrowserCompat = (() => {
             ? 'BLE works on Android/Desktop'
             : isSafari
               ? 'Safari has no Web Bluetooth — use Bluefy'
-              : 'Use Bluefy (iOS) or Chrome (Android/Desktop)'
+              : 'Use Bluefy (iOS) or Chrome (Android/Desktop)',
       },
       classicBt: {
         supported: isClassicBtSupported(),
         detail: hasWebSerial
           ? 'Classic BT (RFCOMM/SPP) via Web Serial'
-          : 'Classic BT requires Chrome 117+ — not in Bluefy/Safari'
-      }
+          : 'Classic BT requires Chrome 117+ — not in Bluefy/Safari',
+      },
     };
   }
 
@@ -61,6 +61,10 @@ const BrowserCompat = (() => {
     isBleSupported,
     isClassicBtSupported,
     getBrowserName,
-    getFeatureMatrix
+    getFeatureMatrix,
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = BrowserCompat;
+}

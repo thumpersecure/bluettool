@@ -20,7 +20,7 @@ const Sharing = (() => {
    * Check if Web Share API with file support is available.
    */
   function canShareFiles() {
-    return !!navigator.canShare;
+    return !!(navigator.canShare && typeof File !== 'undefined');
   }
 
   /**
@@ -39,7 +39,7 @@ const Sharing = (() => {
         await navigator.share({
           title: 'BlueTTool DTMF Tones',
           text: 'DTMF/fax machine test tones from BlueTTool',
-          files: [file]
+          files: [file],
         });
         Logger.success('Audio file shared successfully');
         return true;
@@ -66,9 +66,13 @@ const Sharing = (() => {
         Logger.success('Link shared');
         return true;
       } else {
-        Logger.warn('Web Share API not available — copying to clipboard');
-        await navigator.clipboard.writeText(url);
-        Logger.success('Link copied to clipboard');
+        if (navigator.clipboard?.writeText) {
+          Logger.warn('Web Share API not available — copying to clipboard');
+          await navigator.clipboard.writeText(url);
+          Logger.success('Link copied to clipboard');
+          return false;
+        }
+        Logger.warn('Web Share and clipboard APIs unavailable');
         return false;
       }
     } catch (err) {
@@ -81,7 +85,23 @@ const Sharing = (() => {
    * Share random heart emojis text via AirDrop / native share.
    */
   async function shareHearts() {
-    const hearts = ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💗', '💖', '💝', '💘', '💕', '💞'];
+    const hearts = [
+      '❤️',
+      '🧡',
+      '💛',
+      '💚',
+      '💙',
+      '💜',
+      '🖤',
+      '🤍',
+      '🤎',
+      '💗',
+      '💖',
+      '💝',
+      '💘',
+      '💕',
+      '💞',
+    ];
     const count = 10 + Math.floor(Math.random() * 20);
     let msg = '';
     for (let i = 0; i < count; i++) {
@@ -94,13 +114,17 @@ const Sharing = (() => {
       if (navigator.share) {
         await navigator.share({
           title: 'From BlueTTool',
-          text: msg
+          text: msg,
         });
         Logger.success('Hearts shared');
         return true;
       } else {
-        await navigator.clipboard.writeText(msg);
-        Logger.success('Hearts copied to clipboard');
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(msg);
+          Logger.success('Hearts copied to clipboard');
+          return false;
+        }
+        Logger.warn('Web Share and clipboard APIs unavailable');
         return false;
       }
     } catch (err) {
@@ -122,6 +146,10 @@ const Sharing = (() => {
     canShareFiles,
     shareAudioFile,
     shareLink,
-    shareHearts
+    shareHearts,
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = Sharing;
+}

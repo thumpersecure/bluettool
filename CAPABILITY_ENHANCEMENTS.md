@@ -2,13 +2,13 @@
 
 ## Evaluation Summary
 
-| # | Enhancement | Feasibility | Effort | Value | Recommendation |
-|---|-------------|-------------|--------|-------|----------------|
-| 1 | Export/Import Captures | ✅ High | Low | High | **Implement** |
-| 2 | Automation/Macros | ✅ High | Medium | High | **Implement** |
-| 3 | Multi-device Parallel Control | ✅ High | Low | High | **Implement** |
-| 4 | BLE Advertising Data Access | ❌ Blocked | N/A | High | **Reject** |
-| 5 | Scheduled Tasks / Notification Triggers | ⚠️ Low | High | Medium | **Defer** |
+| #   | Enhancement                             | Feasibility | Effort | Value  | Recommendation |
+| --- | --------------------------------------- | ----------- | ------ | ------ | -------------- |
+| 1   | Export/Import Captures                  | ✅ High     | Low    | High   | **Implement**  |
+| 2   | Automation/Macros                       | ✅ High     | Medium | High   | **Implement**  |
+| 3   | Multi-device Parallel Control           | ✅ High     | Low    | High   | **Implement**  |
+| 4   | BLE Advertising Data Access             | ❌ Blocked  | N/A    | High   | **Reject**     |
+| 5   | Scheduled Tasks / Notification Triggers | ⚠️ Low      | High   | Medium | **Defer**      |
 
 ---
 
@@ -94,11 +94,11 @@
 
 ## Other Considered Enhancements
 
-| Enhancement | Feasibility | Reason |
-|-------------|-------------|--------|
-| Device Pairing Management | ❌ Blocked | Web Bluetooth has no pairing API; pairing is automatic |
-| OTA Firmware Updates | ⚠️ Low | Vendor-specific DFU services; high effort, device-dependent |
-| Notification-based Triggers | ⚠️ Low | iOS background limits, Push API complexity |
+| Enhancement                 | Feasibility | Reason                                                      |
+| --------------------------- | ----------- | ----------------------------------------------------------- |
+| Device Pairing Management   | ❌ Blocked  | Web Bluetooth has no pairing API; pairing is automatic      |
+| OTA Firmware Updates        | ⚠️ Low      | Vendor-specific DFU services; high effort, device-dependent |
+| Notification-based Triggers | ⚠️ Low      | iOS background limits, Push API complexity                  |
 
 ---
 
